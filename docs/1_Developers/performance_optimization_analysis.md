@@ -11,7 +11,8 @@
 2. [Modified Chebyshev Picard Iteration (MCPI)](#2-modified-chebyshev-picard-iteration-mcpi)
 3. [MadNLP.jl — GPU-Accelerated NLP Solver](#3-madnlpjl--gpu-accelerated-nlp-solver)
 4. [Other Third-Party Improvements](#4-other-third-party-improvements)
-5. [Prioritized Recommendations](#5-prioritized-recommendations)
+5. [MCPI Implementation Strategy: Rust + GPU](#5-mcpi-implementation-strategy-rust--gpu)
+6. [Prioritized Recommendations](#6-prioritized-recommendations)
 
 ---
 
@@ -447,9 +448,186 @@ Currently `SNOPT_interface.cpp:123` sets `setIntParameter("Derivative option", 1
 
 ---
 
-## 5. Prioritized Recommendations
+## 5. MCPI Implementation Strategy: Rust + GPU
 
-### Tier 1: High Impact, Low Effort (Do First)
+### 5.1 The Proposal: Rust + burn Framework → C++ FFI → EMTG
+
+The idea is to implement MCPI as a standalone Rust library using the burn deep learning
+framework's GPU compute shaders, then bind it into EMTG's C++ codebase via FFI.
+
+### 5.2 burn Framework Assessment
+
+**burn** (https://github.com/tracel-ai/burn) is a Rust tensor/deep learning framework with
+multiple GPU backends via **CubeCL** (their compute language). CubeCL compiles `#[cube]`-annotated
+Rust functions into CUDA, ROCm, Vulkan, Metal, and WebGPU kernels.
+
+**Critical finding: f64 (double precision) is problematic on GPU backends.**
+
+| Backend | f64 Support | Status |
+|---------|------------|--------|
+| burn-ndarray (CPU) | Yes | Stable |
+| burn-candle (CPU) | Yes | Stable |
+| burn-cuda (NVIDIA GPU) | Partial/Unknown | `Cuda<f64>` type exists but untested for scientific workloads |
+| burn-wgpu (WebGPU/Vulkan) | **No** | WGSL spec lacks f64; `naga_ext_f64` is experimental |
+| burn-tch (libtorch) | Yes | Wraps PyTorch; not a Rust-native path |
+
+The WebGPU specification does **not support f64** (tracked as gpuweb/gpuweb#2805, deferred to
+"Milestone 4+"). This eliminates burn's primary portable backend (WGPU) for astrodynamics.
+
+The CUDA backend (`burn-cuda`) is generic over float type (`Cuda<F = f32, I = i32>`), but
+there is no documentation confirming robust f64 support, no scientific computing benchmarks,
+and the backend is labeled "experimental."
+
+**burn's MATMUL kernels compete with cuBLAS** — Tracel AI published benchmarks showing their
+CubeCL matrix multiply matching NVIDIA's cuBLAS performance. However, these benchmarks are
+at f32 precision for ML workloads, not f64 for scientific computing.
+
+### 5.3 The Core Problem: Wrong Abstraction Layer
+
+MCPI reduces trajectory propagation to these operations:
+1. **Force function evaluations** at N Chebyshev nodes (embarrassingly parallel)
+2. **Matrix-vector multiply**: V × f_eval → Chebyshev coefficients (~60×60 for typical N)
+3. **Picard update**: S × coefficients → updated state trajectory
+4. **Convergence check**: Compare iterations
+
+Operations 2–3 are matrix multiplications. But the matrices are **small** (typically 40–80
+nodes, so 60×60 to 80×80). For individual trajectory segments:
+
+| Operation | Matrix Size | GPU Overhead | GPU Compute | CPU Compute |
+|-----------|-----------|-------------|-------------|-------------|
+| Single MCPI matmul | 60×60 | ~7–15 μs (launch + PCIe) | ~0.01 μs | ~0.5 μs |
+| Force eval at 60 nodes | 60 × O(force model) | ~5 μs (launch) | ~1 μs | ~60 μs |
+
+**For a single trajectory segment, the GPU loses** — kernel launch overhead dominates.
+
+**GPU wins ONLY when batching:** propagating 100+ trajectory segments simultaneously
+(e.g., during MBH population evaluation, Monte Carlo, or multi-segment phases).
+
+### 5.4 Alternative: Rust + faer (CPU) — More Practical
+
+The **faer** library (https://github.com/sarah-ek/faer-rs) is a pure-Rust dense linear
+algebra library specifically optimized for small matrices:
+
+- **14×14 matmul**: ~0.05–0.1 μs (stack-allocated, AVX2 SIMD, zero allocation)
+- **60×60 matmul**: ~0.5–1 μs (still fits in L1 cache)
+- Matches or exceeds OpenBLAS/MKL for matrices below ~100×100
+- Full f64 support, pure Rust, no external dependencies
+- **Competitive with Eigen** for fixed-size small matrices
+
+For MCPI's typical matrix sizes, faer on CPU is **100× faster than burn on GPU** per
+individual operation due to eliminated launch/transfer overhead.
+
+### 5.5 Rust → C++ FFI: Feasible and Negligible Overhead
+
+The FFI story is clean. Two approaches:
+
+**Option A: `extern "C"` + cbindgen (Recommended)**
+```rust
+// Rust side
+#[no_mangle]
+pub extern "C" fn mcpi_propagate(
+    initial_state: *const f64,  // 14 elements (state + epoch + mass + ...)
+    t0: f64,
+    tf: f64,
+    control: *const f64,        // 3 × N_segments thrust vectors
+    n_segments: usize,
+    out_state: *mut f64,        // 14 elements
+    out_stm: *mut f64,          // 196 elements (14×14 flattened)
+) -> i32 { ... }
+```
+
+```cpp
+// C++ side (auto-generated header via cbindgen)
+extern "C" int32_t mcpi_propagate(
+    const double* initial_state, double t0, double tf,
+    const double* control, size_t n_segments,
+    double* out_state, double* out_stm);
+```
+
+**Option B: `cxx` crate** — Type-safe bridge, slightly more complex but prevents pointer misuse.
+
+**FFI overhead: ~2–5 ns per call** (one function pointer indirection). With propagation
+taking ~100 μs, this is **0.002%** overhead — completely negligible.
+
+**Build system**: Use **Corrosion** (https://github.com/corrosion-rs/corrosion) to integrate
+Cargo into EMTG's CMake build:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(Corrosion GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git)
+FetchContent_MakeAvailable(Corrosion)
+corrosion_import_crate(MANIFEST_PATH rust_propagator/Cargo.toml)
+target_link_libraries(EMTGv9 PRIVATE rust_propagator)
+```
+
+### 5.6 Proposed Architecture
+
+```
+EMTG C++ codebase
+  └── src/Propagation/MCPIPropagator.h/.cpp    ← C++ wrapper (implements PropagatorBase)
+        └── extern "C" mcpi_propagate()         ← FFI boundary
+              └── rust_propagator crate
+                    ├── src/lib.rs              ← FFI entry points
+                    ├── src/mcpi.rs             ← Core MCPI algorithm
+                    ├── src/chebyshev.rs        ← Chebyshev polynomial operations
+                    ├── src/force_model.rs      ← Force model trait + implementations
+                    └── Cargo.toml
+                          └── dependencies:
+                                faer = "0.20"       ← Small matrix linear algebra
+                                rayon = "1.10"      ← CPU parallelism for batch mode
+```
+
+**Phase 1 (CPU, faer):**
+- Implement MCPI with faer for matrix operations
+- Single-segment propagation: replace `IntegratedFixedStepPropagator` for CoastPhase
+- Validate against RK8(7) reference solutions
+- Expected speedup: modest for single propagations; significant via `rayon` for batch MBH
+
+**Phase 2 (GPU, burn-cuda or cudarc):**
+- Add batched propagation: propagate 100+ trajectories simultaneously on GPU
+- Use `cudarc` (safe Rust CUDA bindings) for direct cuBLAS access to batched GEMM
+- Only triggered when MBH/NSGAII requests batch evaluation
+- Expected speedup: 10–100× for batch workloads
+
+**Phase 3 (STM + low-thrust):**
+- Extend MCPI to propagate STM alongside state (Read et al. 2015 method)
+- Implement adaptive segment sizing (Woollands 2024) for thrust arcs
+- Wire into FBLT/PSFB phase types
+
+### 5.7 Why Rust Over C++ for This?
+
+| Factor | Rust | C++ (CUDA directly) |
+|--------|------|---------------------|
+| Memory safety | Guaranteed (no segfaults in propagator) | Manual management |
+| Parallelism | `rayon` data parallelism with zero-cost safety | OpenMP (easy to get wrong) |
+| Build isolation | Separate Cargo crate; doesn't touch EMTG headers | Deeply entangled with EMTG build |
+| Testing | `cargo test` runs independently of EMTG build | Needs full EMTG build to test |
+| AD compatibility | Enzyme-AD for Rust is in development | Enzyme-AD for C++ is more mature |
+| CUDA access | `cudarc` crate (safe) or `burn-cuda` | Native, no wrapper needed |
+| Code reuse | Standalone library usable outside EMTG | Tightly coupled to EMTG types |
+
+The strongest argument for Rust: **build isolation**. The MCPI propagator can be developed,
+tested, and benchmarked as a standalone `cargo` project without touching EMTG's CMake build
+until integration time. This dramatically reduces development risk.
+
+The strongest argument against: **EMTG team familiarity**. If the team doesn't know Rust,
+the maintenance burden falls on whoever wrote it.
+
+### 5.8 Verdict
+
+**burn specifically is the wrong tool.** It's an ML framework with immature f64 GPU support.
+But the broader idea — Rust for MCPI propagation — has merit:
+
+- **Phase 1 (Rust + faer, CPU)**: Practical, isolatable, testable. Moderate speedup.
+- **Phase 2 (Rust + cudarc, GPU batch)**: The real payoff. Batched cuBLAS GEMM for MCPI.
+- **Alternative**: Skip Rust entirely, write MCPI in C++ with Eigen + cuBLAS. Simpler if
+  the team is C++-native. The math doesn't care what language it's in.
+
+---
+
+## 6. Prioritized Recommendations
+
+### 6.1 Tier 1: High Impact, Low Effort (Do First)
 
 | # | Improvement | Effort | Expected Speedup | Risk |
 |---|-----------|--------|-----------------|------|
@@ -457,14 +635,14 @@ Currently `SNOPT_interface.cpp:123` sets `setIntParameter("Derivative option", 1
 | 2 | **OpenMP parallelize MBH** | 2–4 weeks | 8–32× (scales with cores) | Low |
 | 3 | **Ephemeris caching** | 1–2 weeks | 10–20% on EOM | Very Low |
 
-### Tier 2: High Impact, Medium Effort
+### 6.2 Tier 2: High Impact, Medium Effort
 
 | # | Improvement | Effort | Expected Speedup | Risk |
 |---|-----------|--------|-----------------|------|
 | 4 | **Eigen library** (replace EMTG_Matrix) | 4–8 weeks | 15–40% on propagation | Low |
 | 5 | **IPOPT solver** (open-source alternative) | 4–6 weeks | Accessibility win | Low |
 
-### Tier 3: Transformative, High Effort (Research Investment)
+### 6.3 Tier 3: Transformative, High Effort (Research Investment)
 
 | # | Improvement | Effort | Expected Speedup | Risk |
 |---|-----------|--------|-----------------|------|
@@ -472,7 +650,7 @@ Currently `SNOPT_interface.cpp:123` sets `setIntParameter("Derivative option", 1
 | 7 | **Direct collocation transcription** | 3–6 months | Eliminates propagation from NLP | Medium |
 | 8 | **Enzyme AD** (LLVM-based, GPU) | 2–4 months | GPU derivatives for free | Medium-High |
 
-### Tier 4: Not Recommended for EMTG
+### 6.4 Tier 4: Not Recommended for EMTG
 
 | # | Approach | Why Not |
 |---|---------|---------|
@@ -480,7 +658,7 @@ Currently `SNOPT_interface.cpp:123` sets `setIntParameter("Derivative option", 1
 | 10 | **Full JAX/Julia rewrite** | Effort equivalent to new tool; loses 15+ years of validated C++ |
 | 11 | **CppAD/ADOL-C tape-based AD** | High integration effort for modest gain over GSAD + STM |
 
-### Combined Impact Estimate
+### 6.5 Combined Impact Estimate
 
 Implementing Tiers 1 + 2 (realistic 3-month effort):
 - **MBH throughput:** 8–32× from OpenMP parallelization
@@ -527,6 +705,14 @@ Adding Tier 3 (6–12 month research program):
 - Adept 2: https://www.met.reading.ac.uk/~swrhgnrj/publications/adept.pdf
 - FastAD: https://github.com/JamesYang007/FastAD
 - Enzyme AD: https://enzyme.mit.edu/
+
+### Rust Ecosystem
+- burn framework: https://github.com/tracel-ai/burn
+- CubeCL (GPU compute language for Rust): https://github.com/tracel-ai/cubecl
+- faer (dense linear algebra): https://github.com/sarah-ek/faer-rs
+- cudarc (safe CUDA bindings): https://github.com/coreylowman/cudarc
+- Corrosion (CMake + Cargo): https://github.com/corrosion-rs/corrosion
+- cbindgen (C/C++ header generation): https://github.com/mozilla/cbindgen
 
 ### Other
 - Eigen library: https://eigen.tuxfamily.org/
