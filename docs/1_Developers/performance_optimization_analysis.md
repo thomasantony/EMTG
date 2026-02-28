@@ -450,193 +450,253 @@ Currently `SNOPT_interface.cpp:123` sets `setIntParameter("Derivative option", 1
 
 ## 5. MCPI Implementation Strategy: Rust + GPU
 
-### 5.1 The Proposal: Rust + burn Framework → C++ FFI → EMTG
+### 5.1 Stacking Propagations — Making the Problem GPU-Sized
 
-The idea is to implement MCPI as a standalone Rust library using the burn deep learning
-framework's GPU compute shaders, then bind it into EMTG's C++ codebase via FFI.
+A single MCPI propagation of one trajectory segment involves small matrices (~60×60) where
+GPU kernel launch overhead dominates. The key insight is that EMTG is a **global optimizer**
+that evaluates many candidate trajectories. We can **stack** independent propagations into
+a single batched GPU kernel, making the problem large enough to justify GPU compute.
 
-### 5.2 burn Framework Assessment
+**Sources of parallelism in EMTG (batch dimension B):**
 
-**burn** (https://github.com/tracel-ai/burn) is a Rust tensor/deep learning framework with
-multiple GPU backends via **CubeCL** (their compute language). CubeCL compiles `#[cube]`-annotated
-Rust functions into CUDA, ROCm, Vulkan, Metal, and WebGPU kernels.
+| Source | Batch Size B | When It Applies |
+|--------|-------------|-----------------|
+| **MBH hop-evaluate** | 10–1000+ | Every MBH iteration evaluates a candidate before NLP |
+| **Parallel MBH walkers** | N_walkers (10–100) | Independent MBH instances |
+| **SNOPT FD Jacobian columns** | N_x (100–1000+) | Each perturbed variable → independent evaluate() |
+| **FBLT forward segments** | num_timesteps/2 (10–50) | Within a single phase evaluation |
+| **Multi-journey phases** | N_journeys × N_phases | Independent if no inter-journey coupling |
+| **Monte Carlo** | 100–10,000+ | Post-convergence uncertainty analysis |
 
-**Critical finding: f64 (double precision) is problematic on GPU backends.**
+**Concrete example** — typical low-thrust mission with FBLT transcription:
+- 2 journeys × 1 phase × 20 timesteps = 20 segments per evaluate()
+- SNOPT with ~500 decision variables, FD Jacobian: 500 evaluate() calls per major iteration
+- Total propagation segments per SNOPT major iteration: **500 × 20 = 10,000 segments**
+- With 10 parallel MBH walkers: **100,000 segments per MBH hop-slide cycle**
 
-| Backend | f64 Support | Status |
-|---------|------------|--------|
-| burn-ndarray (CPU) | Yes | Stable |
-| burn-candle (CPU) | Yes | Stable |
-| burn-cuda (NVIDIA GPU) | Partial/Unknown | `Cuda<f64>` type exists but untested for scientific workloads |
-| burn-wgpu (WebGPU/Vulkan) | **No** | WGSL spec lacks f64; `naga_ext_f64` is experimental |
-| burn-tch (libtorch) | Yes | Wraps PyTorch; not a Rust-native path |
+At these batch sizes, GPU MCPI is well-justified. Each of those 10,000 segments needs ~60
+force evaluations at Chebyshev nodes → **600,000 independent force evaluations** per SNOPT
+major iteration. This is a massively parallel workload.
 
-The WebGPU specification does **not support f64** (tracked as gpuweb/gpuweb#2805, deferred to
-"Milestone 4+"). This eliminates burn's primary portable backend (WGPU) for astrodynamics.
+**Stacked MCPI architecture:**
 
-The CUDA backend (`burn-cuda`) is generic over float type (`Cuda<F = f32, I = i32>`), but
-there is no documentation confirming robust f64 support, no scientific computing benchmarks,
-and the backend is labeled "experimental."
+```
+                    ┌─ Segment 1: IC₁, control₁ ─→ [60 Chebyshev nodes] ─→ state₁, STM₁
+                    ├─ Segment 2: IC₂, control₂ ─→ [60 Chebyshev nodes] ─→ state₂, STM₂
+Batched GPU kernel ─┤  ...
+                    ├─ Segment N: ICₙ, controlₙ ─→ [60 Chebyshev nodes] ─→ stateₙ, STMₙ
+                    └─ (all force evals at all nodes computed in one kernel launch)
+```
 
-**burn's MATMUL kernels compete with cuBLAS at f32** — Tracel AI published benchmarks
-(July 2025) showing their CubeCL matrix multiply matching/exceeding cuBLAS on NVIDIA GPUs
-for sizes 512×512 to 8192×8192. However, these benchmarks are **f32 only**. The optimized
-kernel paths (tensor cores, double buffering) are designed for f32/f16/bf16.
+The T, V, S matrices (Chebyshev integration operators) are **constant** across all segments
+of the same length — pre-computed once and stored in GPU memory.
 
-**Missing linalg operations:** burn provides norms, matmul, trace, LU decomposition.
-**Missing**: matrix inverse, solve (Ax=b), eigendecomposition, SVD, Cholesky, QR. MCPI
-would need some of these for initialization/segmentation.
+**Important caveat — sequential dependency within a phase:** In EMTG's current shooting
+formulation, forward segments within a single phase are sequential (segment i+1's initial
+state depends on segment i's final state). MCPI can handle this in two ways:
+1. **Batch across different candidate evaluations** (MBH walkers, FD perturbations) — these
+   are fully independent
+2. **MCPI operates on the entire phase arc at once** — unlike RK stepping, MCPI approximates
+   the full trajectory as a Chebyshev polynomial and iterates. The sequential dependency is
+   handled within the Picard iteration, not by sequential segment propagation.
 
-### 5.3 The Core Problem: Wrong Abstraction Layer
+### 5.2 burn Framework — Revised Assessment
 
-MCPI reduces trajectory propagation to these operations:
-1. **Force function evaluations** at N Chebyshev nodes (embarrassingly parallel)
-2. **Matrix-vector multiply**: V × f_eval → Chebyshev coefficients (~60×60 for typical N)
-3. **Picard update**: S × coefficients → updated state trajectory
-4. **Convergence check**: Compare iterations
+Given the deployment context:
+- **Dev machines**: No NVIDIA GPUs (AMD/Intel/CPU only)
+- **Production**: Cloud nodes with large GPUs (likely A100/H100 with good f64 throughput)
+- **Team**: Rust-native
 
-Operations 2–3 are matrix multiplications. But the matrices are **small** (typically 40–80
-nodes, so 60×60 to 80×80). For individual trajectory segments:
+burn's **cross-platform story becomes its key advantage**:
 
-| Operation | Matrix Size | GPU Overhead | GPU Compute | CPU Compute |
-|-----------|-----------|-------------|-------------|-------------|
-| Single MCPI matmul | 60×60 | ~7–15 μs (launch + PCIe) | ~0.01 μs | ~0.5 μs |
-| Force eval at 60 nodes | 60 × O(force model) | ~5 μs (launch) | ~1 μs | ~60 μs |
+| Backend | Dev Use | Production Use | f64 Support |
+|---------|---------|----------------|-------------|
+| burn-ndarray (CPU) | **Primary dev/test** | Fallback | Full f64 |
+| burn-wgpu (Vulkan) | Dev GPU testing | — | **No f64** (WGSL limitation) |
+| burn-cuda (NVIDIA) | — | **Primary production** | Hardware supports f64; CubeCL support needs validation |
+| burn-hip (AMD ROCm) | Possible dev GPU | Alternative prod | Hardware supports f64; untested in CubeCL |
 
-**For a single trajectory segment, the GPU loses** — kernel launch overhead dominates.
+**Write once, deploy everywhere** — the burn `Backend` trait means the same MCPI code runs
+on CPU during development and GPU in production with zero code changes:
 
-**GPU wins ONLY when batching:** propagating 100+ trajectory segments simultaneously
-(e.g., during MBH population evaluation, Monte Carlo, or multi-segment phases).
+```rust
+fn mcpi_propagate_batch<B: Backend>(
+    initial_conditions: Tensor<B, 2>,  // [batch, 14]
+    t_spans: Tensor<B, 1>,            // [batch]
+    controls: Tensor<B, 3>,           // [batch, segments, 3]
+    chebyshev_ops: &ChebyshevOps<B>,  // pre-computed T, V, S matrices
+) -> (Tensor<B, 2>, Tensor<B, 3>)    // states [batch, 14], STMs [batch, 14, 14]
+```
 
-Additionally, **consumer NVIDIA GPUs** (RTX 3000/4000/5000 series) execute f64 at
-**1/64th the rate of f32**. Only datacenter GPUs (A100: 19.5 TFLOPS f64, H100: 34 TFLOPS f64)
-maintain a usable 1:2 f64:f32 ratio. This further limits the GPU value proposition for
-astrodynamics unless datacenter hardware is available.
+**f64 strategy for burn:**
 
-**Mixed-precision strategy:** One option is to use f32 GPU for fast MCPI sweeps during MBH
-exploration (where ~7-digit precision is sufficient to identify promising basins) and f64 CPU
-for final trajectory refinement. This avoids the f64 GPU problem entirely while still
-leveraging GPU parallelism for the search phase.
+The f64 situation is more nuanced than initially assessed:
+- **CPU backends (dev)**: f64 works perfectly with burn-ndarray
+- **CUDA backend (prod on A100/H100)**: These GPUs deliver 19.5 / 34 TFLOPS f64 respectively
+  (1:2 ratio with f32, unlike consumer GPUs at 1:64). CUDA hardware natively supports f64.
+  CubeCL's CUDA JIT compiler needs to be validated for f64 — the type parameter exists
+  (`Cuda<f64>`) but the optimized matmul kernels may fall back to simpler paths. Even a
+  naive f64 kernel on A100 would outperform CPU for batch sizes > 100.
+- **Mixed-precision (practical compromise)**: Use f32 for MBH exploration (7 digits suffices
+  to identify promising basins), f64 CPU for final refinement. burn supports both precisions
+  with the same code via the generic `FloatElem` type.
+- **Vulkan f64**: Vulkan does support f64 via `shaderFloat64` extension on most desktop GPUs.
+  Whether CubeCL's SPIR-V compiler emits f64 instructions is untested but architecturally
+  possible. This could enable f64 GPU development on non-NVIDIA hardware.
 
-### 5.4 Alternative: Rust + faer (CPU) — More Practical
+**burn's MATMUL performance:** CubeCL matmul kernels match/exceed cuBLAS at f32 (benchmarked
+July 2025, sizes 512–8192). No f64 benchmarks exist, but for batched MCPI the matrices stack
+to significant sizes: 100 segments × 60 nodes × 6 state dims = 36,000×6 — well into GPU
+territory.
 
-The **faer** library (https://github.com/sarah-ek/faer-rs) is a pure-Rust dense linear
-algebra library specifically optimized for small matrices:
+**Custom GPU kernels via CubeCL:** The `#[cube]` macro allows writing force model evaluation
+kernels in Rust that compile to CUDA/ROCm/Vulkan. This means the force model runs natively
+on GPU — no CPU↔GPU round-trips for force evaluation.
 
-- **14×14 matmul**: ~0.05–0.1 μs (stack-allocated, AVX2 SIMD, zero allocation)
-- **60×60 matmul**: ~0.5–1 μs (still fits in L1 cache)
-- Matches or exceeds OpenBLAS/MKL for matrices below ~100×100
-- Full f64 support, pure Rust, no external dependencies
-- **Competitive with Eigen** for fixed-size small matrices
+**Missing linalg:** burn lacks matrix inverse, solve, eigendecomposition, SVD, Cholesky, QR.
+For MCPI, these are only needed during one-time initialization (pre-computing Chebyshev
+operators), not in the hot loop. Use faer for initialization, burn for the hot path.
 
-For MCPI's typical matrix sizes, faer on CPU is **100× faster than burn on GPU** per
-individual operation due to eliminated launch/transfer overhead.
+### 5.3 Rust → C++ FFI
 
-### 5.5 Rust → C++ FFI: Feasible and Negligible Overhead
-
-The FFI story is clean. Two approaches:
+FFI overhead is negligible (~2–5 ns per call). Two approaches:
 
 **Option A: `extern "C"` + cbindgen (Recommended)**
 ```rust
-// Rust side
 #[no_mangle]
-pub extern "C" fn mcpi_propagate(
-    initial_state: *const f64,  // 14 elements (state + epoch + mass + ...)
-    t0: f64,
-    tf: f64,
-    control: *const f64,        // 3 × N_segments thrust vectors
+pub extern "C" fn mcpi_propagate_batch(
+    initial_states: *const f64,  // [batch × 14] flattened
+    batch_size: usize,
+    t_spans: *const f64,         // [batch]
+    controls: *const f64,        // [batch × segments × 3] flattened
     n_segments: usize,
-    out_state: *mut f64,        // 14 elements
-    out_stm: *mut f64,          // 196 elements (14×14 flattened)
+    out_states: *mut f64,        // [batch × 14]
+    out_stms: *mut f64,          // [batch × 196] (14×14 flattened)
 ) -> i32 { ... }
 ```
 
-```cpp
-// C++ side (auto-generated header via cbindgen)
-extern "C" int32_t mcpi_propagate(
-    const double* initial_state, double t0, double tf,
-    const double* control, size_t n_segments,
-    double* out_state, double* out_stm);
+**Option B: PyO3 Python bindings** — Since the team uses EMTG through Python bindings,
+the Rust MCPI library could also expose a Python API directly:
+```python
+import emtg_mcpi
+results = emtg_mcpi.propagate_batch(
+    initial_states,  # np.ndarray [batch, 14]
+    t_spans,         # np.ndarray [batch]
+    controls,        # np.ndarray [batch, segments, 3]
+    backend="cuda"   # or "cpu", "vulkan"
+)
 ```
+This enables using the propagator independently of the C++ EMTG binary.
 
-**Option B: `cxx` crate** — Type-safe bridge, slightly more complex but prevents pointer misuse.
+**Build system**: Corrosion for CMake integration, or standalone `maturin` for Python wheels.
 
-**FFI overhead: ~2–5 ns per call** (one function pointer indirection). With propagation
-taking ~100 μs, this is **0.002%** overhead — completely negligible.
-
-**Build system**: Use **Corrosion** (https://github.com/corrosion-rs/corrosion) to integrate
-Cargo into EMTG's CMake build:
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(Corrosion GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git)
-FetchContent_MakeAvailable(Corrosion)
-corrosion_import_crate(MANIFEST_PATH rust_propagator/Cargo.toml)
-target_link_libraries(EMTGv9 PRIVATE rust_propagator)
-```
-
-### 5.6 Proposed Architecture
+### 5.4 Proposed Architecture
 
 ```
-EMTG C++ codebase
-  └── src/Propagation/MCPIPropagator.h/.cpp    ← C++ wrapper (implements PropagatorBase)
-        └── extern "C" mcpi_propagate()         ← FFI boundary
-              └── rust_propagator crate
-                    ├── src/lib.rs              ← FFI entry points
-                    ├── src/mcpi.rs             ← Core MCPI algorithm
-                    ├── src/chebyshev.rs        ← Chebyshev polynomial operations
-                    ├── src/force_model.rs      ← Force model trait + implementations
-                    └── Cargo.toml
-                          └── dependencies:
-                                faer = "0.20"       ← Small matrix linear algebra
-                                rayon = "1.10"      ← CPU parallelism for batch mode
+┌─────────────────────────────────────────────────────────────┐
+│  Python layer (PyEMTG / user scripts)                       │
+│    ├── Direct PyO3 bindings to Rust MCPI (for Python use)   │
+│    └── Standard EMTG subprocess call (existing workflow)    │
+├─────────────────────────────────────────────────────────────┤
+│  EMTG C++ codebase                                          │
+│    └── src/Propagation/MCPIPropagator.h/.cpp                │
+│          └── extern "C" FFI to Rust library                 │
+├─────────────────────────────────────────────────────────────┤
+│  emtg_mcpi Rust crate                                       │
+│    ├── src/lib.rs           ← C FFI + PyO3 entry points     │
+│    ├── src/mcpi.rs          ← Core MCPI algorithm (generic) │
+│    ├── src/chebyshev.rs     ← Chebyshev T, V, S operators   │
+│    ├── src/force_models/    ← CubeCL GPU kernels            │
+│    │     ├── point_mass.rs                                  │
+│    │     ├── j2_gravity.rs                                  │
+│    │     ├── third_body.rs                                  │
+│    │     └── low_thrust.rs                                  │
+│    ├── src/stm.rs           ← STM propagation via MCPI      │
+│    └── Cargo.toml                                           │
+│          └── dependencies:                                  │
+│                burn = "0.20"      ← GPU tensor ops           │
+│                burn-ndarray       ← CPU dev backend          │
+│                burn-cuda          ← Production GPU backend   │
+│                faer = "0.20"      ← Initialization linalg   │
+│                pyo3 = "0.22"      ← Python bindings          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Phase 1 (CPU, faer):**
-- Implement MCPI with faer for matrix operations
-- Single-segment propagation: replace `IntegratedFixedStepPropagator` for CoastPhase
-- Validate against RK8(7) reference solutions
-- Expected speedup: modest for single propagations; significant via `rayon` for batch MBH
+### 5.5 Implementation Phases
 
-**Phase 2 (GPU, burn-cuda or cudarc):**
-- Add batched propagation: propagate 100+ trajectories simultaneously on GPU
-- Use `cudarc` (safe Rust CUDA bindings) for direct cuBLAS access to batched GEMM
-- Only triggered when MBH/NSGAII requests batch evaluation
-- Expected speedup: 10–100× for batch workloads
+**Phase 1 — CPU MCPI with burn-ndarray (2–3 months):**
+- Implement core MCPI algorithm generic over burn `Backend`
+- Force models: point-mass + J2 + third-body gravity (covers most preliminary design)
+- Pre-compute Chebyshev operators using faer
+- Batch propagation API: `propagate_batch(Vec<InitialCondition>) → Vec<Result>`
+- Validate against EMTG's RK8(7) reference solutions (testatron)
+- Python bindings via PyO3 for standalone testing
+- C FFI for EMTG integration
+- All development on CPU — no GPU needed yet
 
-**Phase 3 (STM + low-thrust):**
+**Phase 2 — GPU deployment with burn-cuda (1–2 months):**
+- Validate burn-cuda f64 support on A100/H100 (the critical experiment)
+- If f64 works: deploy directly with `Cuda<f64>` backend
+- If f64 doesn't work: implement mixed-precision strategy (f32 GPU search + f64 CPU refine)
+- Benchmark batched propagation: measure crossover point (batch size where GPU > CPU)
+- Write CubeCL force model kernels for GPU-native force evaluation
+- Integrate with EMTG's MBH: batch all hop-evaluations per iteration
+
+**Phase 3 — STM propagation + low-thrust (2–3 months):**
 - Extend MCPI to propagate STM alongside state (Read et al. 2015 method)
+- STM stacking: [batch × 14 × 14] batched matrix products
 - Implement adaptive segment sizing (Woollands 2024) for thrust arcs
-- Wire into FBLT/PSFB phase types
+- Wire into FBLT/PSFB phase types via `MCPIPropagator`
+- Potentially rearchitect MBH to do hop→batch-evaluate→select (instead of serial)
 
-### 5.7 Why Rust Over C++ for This?
+**Phase 4 — Explore Vulkan f64 for dev machines (optional):**
+- Test CubeCL SPIR-V emission with `shaderFloat64`
+- If it works, enable GPU-accelerated development on AMD/Intel hardware
+- If not, CPU development workflow from Phase 1 is sufficient
 
-| Factor | Rust | C++ (CUDA directly) |
-|--------|------|---------------------|
-| Memory safety | Guaranteed (no segfaults in propagator) | Manual management |
-| Parallelism | `rayon` data parallelism with zero-cost safety | OpenMP (easy to get wrong) |
-| Build isolation | Separate Cargo crate; doesn't touch EMTG headers | Deeply entangled with EMTG build |
-| Testing | `cargo test` runs independently of EMTG build | Needs full EMTG build to test |
-| AD compatibility | Enzyme-AD for Rust is in development | Enzyme-AD for C++ is more mature |
-| CUDA access | `cudarc` crate (safe) or `burn-cuda` | Native, no wrapper needed |
-| Code reuse | Standalone library usable outside EMTG | Tightly coupled to EMTG types |
+### 5.6 Force Model on GPU — The Callback Problem
 
-The strongest argument for Rust: **build isolation**. The MCPI propagator can be developed,
-tested, and benchmarked as a standalone `cargo` project without touching EMTG's CMake build
-until integration time. This dramatically reduces development risk.
+EMTG's `SpacecraftAccelerationModel` is deeply embedded in C++ with modular acceleration
+terms, ephemeris lookups, and hardware models. It cannot run on GPU directly.
 
-The strongest argument against: **EMTG team familiarity**. If the team doesn't know Rust,
-the maintenance burden falls on whoever wrote it.
+**Solution: Re-implement a subset of force models in CubeCL (Rust GPU kernels).**
+
+For preliminary mission design, most problems use:
+- Central body point-mass gravity (trivial)
+- J2 oblateness (straightforward)
+- Third-body gravity from 1–5 bodies (need ephemeris data on GPU)
+- Low-thrust term (control vector × thrust magnitude)
+
+These can be implemented as CubeCL kernels. Ephemeris data can be pre-loaded as Chebyshev
+polynomial coefficients in GPU memory (SplineEphem already uses splines — same idea).
+
+For high-fidelity models (spherical harmonics > J2, drag, SRP), fall back to CPU propagation
+via EMTG's existing integrators. The GPU path is for fast exploration; the CPU path is for
+final refinement. This aligns with EMTG's existing dual-fidelity workflow.
+
+### 5.7 Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| burn-cuda f64 doesn't work | Medium | High | Mixed-precision fallback; or use cudarc for raw cuBLAS dgemm |
+| CubeCL kernel performance < cuBLAS for f64 | Medium | Medium | Naive f64 kernel on A100 still beats CPU at batch > 100 |
+| Force model fidelity gap (GPU vs EMTG C++) | Low | Medium | GPU for exploration only; C++ for refinement |
+| Rust↔C++ FFI complexity | Low | Low | extern "C" is well-understood; 2-5 ns overhead |
+| burn API instability (v0.20) | Medium | Low | Pin version; core tensor ops are stable |
 
 ### 5.8 Verdict
 
-**burn specifically is the wrong tool.** It's an ML framework with immature f64 GPU support.
-But the broader idea — Rust for MCPI propagation — has merit:
+The Rust + burn approach is viable and well-suited to the team's constraints:
 
-- **Phase 1 (Rust + faer, CPU)**: Practical, isolatable, testable. Moderate speedup.
-- **Phase 2 (Rust + cudarc, GPU batch)**: The real payoff. Batched cuBLAS GEMM for MCPI.
-- **Alternative**: Skip Rust entirely, write MCPI in C++ with Eigen + cuBLAS. Simpler if
-  the team is C++-native. The math doesn't care what language it's in.
+1. **burn IS appropriate** when the goal is cross-platform GPU (dev on CPU/Vulkan, deploy on
+   CUDA). It's not ideal for f64, but the mixed-precision strategy and A100 f64 capability
+   make it workable.
+2. **Stacking propagations** across MBH walkers, FD perturbations, and multi-segment phases
+   creates batch sizes of 1,000–100,000 — firmly in GPU-beneficial territory.
+3. **Phase 1 is zero-risk**: Pure CPU Rust with burn-ndarray, validated against EMTG's RK8(7).
+   Even without GPU, this gives a clean MCPI implementation with Python bindings.
+4. **Phase 2 is the payoff**: GPU batched propagation on cloud A100/H100 nodes.
+5. **Build isolation**: The entire crate is developed and tested independently of EMTG.
 
 ---
 
