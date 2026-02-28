@@ -513,8 +513,8 @@ burn's **cross-platform story becomes its key advantage**:
 |---------|---------|----------------|-------------|
 | burn-ndarray (CPU) | **Primary dev/test** | Fallback | Full f64 |
 | burn-wgpu (Vulkan) | Dev GPU testing | — | **No f64** (WGSL limitation) |
-| burn-cuda (NVIDIA) | — | **Primary production** | Hardware supports f64; CubeCL support needs validation |
-| burn-hip (AMD ROCm) | Possible dev GPU | Alternative prod | Hardware supports f64; untested in CubeCL |
+| burn-cuda (NVIDIA) | — | **Primary production** | CubeCL `Float` trait supports f64; compiles to PTX with native f64 ops |
+| burn-hip (AMD ROCm) | Possible dev GPU | Alternative prod | Hardware supports f64; CubeCL HIP runtime available |
 
 **Write once, deploy everywhere** — the burn `Backend` trait means the same MCPI code runs
 on CPU during development and GPU in production with zero code changes:
@@ -530,19 +530,24 @@ fn mcpi_propagate_batch<B: Backend>(
 
 **f64 strategy for burn:**
 
-The f64 situation is more nuanced than initially assessed:
+CubeCL's `Float` trait **does support f64** generically. Kernels written as `fn my_kernel<F: Float>(...)` can
+be instantiated with either f32 or f64. The CUDA backend compiles these to PTX which has native f64
+instructions. This means the f64 path is architecturally sound, not a hack.
+
 - **CPU backends (dev)**: f64 works perfectly with burn-ndarray
 - **CUDA backend (prod on A100/H100)**: These GPUs deliver 19.5 / 34 TFLOPS f64 respectively
-  (1:2 ratio with f32, unlike consumer GPUs at 1:64). CUDA hardware natively supports f64.
-  CubeCL's CUDA JIT compiler needs to be validated for f64 — the type parameter exists
-  (`Cuda<f64>`) but the optimized matmul kernels may fall back to simpler paths. Even a
-  naive f64 kernel on A100 would outperform CPU for batch sizes > 100.
+  (1:2 ratio with f32, unlike consumer GPUs at 1:64). CubeCL's CUDA JIT compiles to PTX with
+  native f64 ops. The optimized matmul kernels (tensor cores, double buffering) are designed
+  for f32/f16, so f64 matmul may fall back to simpler kernel paths — but on A100 hardware,
+  even a naive f64 kernel outperforms CPU at batch sizes > 100.
 - **Mixed-precision (practical compromise)**: Use f32 for MBH exploration (7 digits suffices
   to identify promising basins), f64 CPU for final refinement. burn supports both precisions
   with the same code via the generic `FloatElem` type.
 - **Vulkan f64**: Vulkan does support f64 via `shaderFloat64` extension on most desktop GPUs.
   Whether CubeCL's SPIR-V compiler emits f64 instructions is untested but architecturally
   possible. This could enable f64 GPU development on non-NVIDIA hardware.
+- **WGPU f64**: WebGPU/WGSL spec does **not** support f64. The WGPU backend is limited to f32.
+  This means WGPU cannot be used for f64 development — use burn-ndarray (CPU) instead.
 
 **burn's MATMUL performance:** CubeCL matmul kernels match/exceed cuBLAS at f32 (benchmarked
 July 2025, sizes 512–8192). No f64 benchmarks exist, but for batched MCPI the matrices stack
@@ -678,8 +683,8 @@ final refinement. This aligns with EMTG's existing dual-fidelity workflow.
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| burn-cuda f64 doesn't work | Medium | High | Mixed-precision fallback; or use cudarc for raw cuBLAS dgemm |
-| CubeCL kernel performance < cuBLAS for f64 | Medium | Medium | Naive f64 kernel on A100 still beats CPU at batch > 100 |
+| burn-cuda f64 kernel issues | Low-Medium | High | CubeCL Float trait supports f64 → PTX; fallback: mixed-precision or cudarc for raw cuBLAS dgemm |
+| CubeCL f64 matmul slower than cuBLAS dgemm | Medium | Medium | Optimized kernels target f32; but naive f64 on A100 still beats CPU at batch > 100 |
 | Force model fidelity gap (GPU vs EMTG C++) | Low | Medium | GPU for exploration only; C++ for refinement |
 | Rust↔C++ FFI complexity | Low | Low | extern "C" is well-understood; 2-5 ns overhead |
 | burn API instability (v0.20) | Medium | Low | Pin version; core tensor ops are stable |
