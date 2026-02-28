@@ -478,9 +478,14 @@ The CUDA backend (`burn-cuda`) is generic over float type (`Cuda<F = f32, I = i3
 there is no documentation confirming robust f64 support, no scientific computing benchmarks,
 and the backend is labeled "experimental."
 
-**burn's MATMUL kernels compete with cuBLAS** — Tracel AI published benchmarks showing their
-CubeCL matrix multiply matching NVIDIA's cuBLAS performance. However, these benchmarks are
-at f32 precision for ML workloads, not f64 for scientific computing.
+**burn's MATMUL kernels compete with cuBLAS at f32** — Tracel AI published benchmarks
+(July 2025) showing their CubeCL matrix multiply matching/exceeding cuBLAS on NVIDIA GPUs
+for sizes 512×512 to 8192×8192. However, these benchmarks are **f32 only**. The optimized
+kernel paths (tensor cores, double buffering) are designed for f32/f16/bf16.
+
+**Missing linalg operations:** burn provides norms, matmul, trace, LU decomposition.
+**Missing**: matrix inverse, solve (Ax=b), eigendecomposition, SVD, Cholesky, QR. MCPI
+would need some of these for initialization/segmentation.
 
 ### 5.3 The Core Problem: Wrong Abstraction Layer
 
@@ -502,6 +507,16 @@ nodes, so 60×60 to 80×80). For individual trajectory segments:
 
 **GPU wins ONLY when batching:** propagating 100+ trajectory segments simultaneously
 (e.g., during MBH population evaluation, Monte Carlo, or multi-segment phases).
+
+Additionally, **consumer NVIDIA GPUs** (RTX 3000/4000/5000 series) execute f64 at
+**1/64th the rate of f32**. Only datacenter GPUs (A100: 19.5 TFLOPS f64, H100: 34 TFLOPS f64)
+maintain a usable 1:2 f64:f32 ratio. This further limits the GPU value proposition for
+astrodynamics unless datacenter hardware is available.
+
+**Mixed-precision strategy:** One option is to use f32 GPU for fast MCPI sweeps during MBH
+exploration (where ~7-digit precision is sufficient to identify promising basins) and f64 CPU
+for final trajectory refinement. This avoids the f64 GPU problem entirely while still
+leveraging GPU parallelism for the search phase.
 
 ### 5.4 Alternative: Rust + faer (CPU) — More Practical
 
