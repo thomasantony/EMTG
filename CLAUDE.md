@@ -16,16 +16,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # 1. Configure dependency paths (one-time setup)
 cp EMTG-Config-template.cmake EMTG-Config.cmake
-# Edit EMTG-Config.cmake to set: CSPICE_DIR, SNOPT_ROOT_DIR, BOOST_ROOT, GSL_PATH
+# Edit EMTG-Config.cmake to set: CSPICE_DIR, BOOST_ROOT, GSL_PATH
+# Set SNOPT_ROOT_DIR if using SNOPT, IPOPT_ROOT_DIR if using IPOPT
 
-# 2. Generate and build
-cmake -B build
+# 2. Generate and build (choose your solver configuration)
+cmake -B build                                          # SNOPT only (default)
+cmake -B build -DUSE_IPOPT=ON                           # Both SNOPT and IPOPT
+cmake -B build -DUSE_SNOPT=OFF -DUSE_IPOPT=ON           # IPOPT only (no SNOPT needed)
+
 cmake --build build
 
 # Build output: bin/EMTGv9
 ```
 
-Default build type is Release. Key CMake options: `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `SAFE_SNOPT` (ON), `FAST_EMTG_MATRIX` (ON). See `CMakeLists.txt` for full list.
+Default build type is Release. Key CMake options: `USE_SNOPT` (ON), `USE_IPOPT` (OFF), `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `SAFE_SNOPT` (ON), `FAST_EMTG_MATRIX` (ON). At least one of `USE_SNOPT` or `USE_IPOPT` must be enabled. See `CMakeLists.txt` for full list.
 
 ## Running
 
@@ -33,6 +37,8 @@ Default build type is Release. Key CMake options: `SPLINE_EPHEM` (ON), `BACKGROU
 ./bin/EMTGv9 path/to/mission.emtgopt   # Run with specific options file
 ./bin/EMTGv9                             # Uses default.emtgopt in current directory
 ```
+
+To use IPOPT as the solver, set `NLP_solver_type 2` in the `.emtgopt` file.
 
 ## Testing
 
@@ -64,15 +70,27 @@ Test categories live in `testatron/tests/` (137 tests across 10 folders). Result
    - Generated from `OptionsOverhaul/list_of_missionoptions.csv` and `list_of_journeyoptions.csv` by `PyEMTG/OptionsOverhaul/make_EMTG_missionoptions_journeyoptions.py`
    - To add options: update the CSV, then re-run the generator
 
-2. **SNOPT is proprietary** — not included in the repo. `depend/snopt/` has only CMake configs and a placeholder. The CMake auto-detects SNOPT version (7.2/7.5/7.6/7.7) from directory structure.
+2. **SNOPT is proprietary and now optional** — not included in the repo. `depend/snopt/` has only CMake configs and a placeholder. The CMake auto-detects SNOPT version (7.2/7.5/7.6/7.7) from directory structure. EMTG can now be built with IPOPT only (`-DUSE_SNOPT=OFF -DUSE_IPOPT=ON`).
 
-3. **Conditional compilation** — feature-gated code uses `#ifdef SPLINE_EPHEM`, `#ifdef SNOPT72/75/76/77`, `#ifdef HAS_PROBEENTRYPHASE`, `#ifdef HAS_BUILT_IN_THRUSTERS`, `#ifdef BACKGROUND_MODE`
+3. **Conditional compilation** — feature-gated code uses `#ifdef SPLINE_EPHEM`, `#ifdef USE_SNOPT`, `#ifdef USE_IPOPT`, `#ifdef SNOPT72/75/76/77`, `#ifdef HAS_PROBEENTRYPHASE`, `#ifdef HAS_BUILT_IN_THRUSTERS`, `#ifdef BACKGROUND_MODE`
 
 ## Architecture
 
 ### NLP Formulation
 
-The entire mission is formulated as a single NLP problem with decision variables (X), constraints (F), and Jacobian entries (G). The solver (SNOPT or WORHP) calls into `SNOPT_interface::SNOPT_user_function()` which triggers the full evaluation chain.
+The entire mission is formulated as a single NLP problem with decision variables (X), constraints (F), and Jacobian entries (G). The solver calls `problem::evaluate()` which triggers the full evaluation chain. Supported solvers:
+- **SNOPT** (proprietary, `NLP_solver_type 0`) — Sequential Quadratic Programming via `SNOPT_interface`
+- **IPOPT** (open-source, `NLP_solver_type 2`) — Interior Point method via `IPOPT_interface` with L-BFGS Hessian approximation
+
+### NLP Solver Architecture
+
+```
+NLP_interface (abstract base, src/InnerLoop/NLP_interface.h)
+├── SNOPT_interface (owns snoptProblemExtension, guarded by USE_SNOPT)
+└── IPOPT_interface (owns EMTG_IPOPT_NLP : Ipopt::TNLP, guarded by USE_IPOPT)
+```
+
+MBH and FilamentWalker use `NLP_interface*` polymorphically. The solver is selected in `problem::optimize()` based on `NLP_solver_type`.
 
 ### Core Class Hierarchy
 
@@ -88,7 +106,7 @@ problem (abstract NLP base, src/Core/problem.h)
 ### Hot Path
 
 ```
-SNOPT_user_function() → problem::evaluate() → Mission → Journey → Phase
+NLP solver → problem::evaluate() → Mission → Journey → Phase
   → Propagator::propagate() → ExplicitRungeKutta::step() [repeated]
     → EOM::evaluate() [4× for RK4, 13× for DP87]
       → SpacecraftAccelerationModel::computeAcceleration()
@@ -108,7 +126,7 @@ SNOPT_user_function() → problem::evaluate() → Mission → Journey → Phase
 | `src/Executable/` | Entry point (`EMTG_v9.cpp`) |
 | `src/Core/` | Options, enums, abstract `problem` base class |
 | `src/Mission/` | Mission → Journey → Phase hierarchy, objective functions |
-| `src/InnerLoop/` | NLP solver interfaces (SNOPT, WORHP), MBH global search |
+| `src/InnerLoop/` | NLP solver interfaces (SNOPT, IPOPT, WORHP), MBH global search |
 | `src/Astrodynamics/` | Orbital mechanics, gravity, atmosphere, state representations, EOMs |
 | `src/Integration/` | Runge-Kutta integrators (RK4, DP87) |
 | `src/Propagation/` | Kepler and integrated propagators |
@@ -136,5 +154,6 @@ The `src/CMakeLists.txt` creates a static library `emtg` (all source except `Exe
 - New phase types: follow the factory pattern and inheritance hierarchy
 - New acceleration terms: implement the `AccelerationModelTerm` interface
 - New objective functions: follow patterns in `src/Mission/ObjectiveFunctions/`
+- New NLP solvers: inherit from `NLP_interface`, add conditional compilation with `#ifdef USE_<SOLVER>`
 - Options changes must maintain backward compatibility with existing `.emtgopt` files
 - Run testatron regression tests after significant changes

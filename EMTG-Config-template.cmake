@@ -10,9 +10,12 @@ set(CSPICE_DIR /archive/Utilities/CSPICE)
 #set(CSPICE_DIR /archive/Utilities/CSPICE)
 
 
-#---------SNOPT hints------------
+#---------SNOPT hints (optional)------------
+#SNOPT is optional if you have IPOPT enabled. Set USE_SNOPT=OFF in your CMake
+#configuration to build without SNOPT. At least one of USE_SNOPT or USE_IPOPT must be ON.
+#
 #Change this next line to point towards your snopt7 root directory.  This is not your cppsrc or your lib directory, but up one level from that.
-#If SNOPT has been installed on the system path, this hint is probably unnecessary. 
+#If SNOPT has been installed on the system path, this hint is probably unnecessary.
 #You can alternatively add and set the SNOPT_INCLUDEDIR and SNOPT_LIBDIR as direct paths to your cppsrc and appropriate lib directory.
 
 #Update this line and change it to be your appropriate path (works for Windows or Unix-based systems)

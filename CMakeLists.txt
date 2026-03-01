@@ -59,6 +59,7 @@ option(SPLINE_EPHEM "Enable SplineEphem" ON)
 option(BUILD_EMTG_TESTBED "Build the EMTG testing framework" OFF)
 option(BUILD_PROPULATOR "Build the Propulator" OFF)
 option(BUILD_PYHARDWARE "Build PyHardware" OFF)
+option(USE_SNOPT "Build with SNOPT solver support" ON)
 option(USE_IPOPT "Build with IPOPT solver support" OFF)
 
 # We want Background mode to default to ON for NavLab runs
@@ -176,7 +177,8 @@ set(EMTG_LIBRARIES ${EMTG_LIBRARIES} ${CSPICE_LIBRARY})
 include_directories("${CSPICE_DIR}/include")
 link_directories("${CSPICE_DIR}/lib")
 
-#----------------------------SNOPT Items-------------------------------------
+#----------------------------SNOPT Items (optional)-------------------------------------
+if(USE_SNOPT)
 message(STATUS \n "Now checking on SNOPT...")
 
 # Check for the latest versions of SNOPT first
@@ -309,8 +311,11 @@ else(IS_DIRECTORY ${SNOPTDIR_OVRD}/interfaces)
 endif()
 
 include_directories(${SNOPT_INCLUDE_DIR})
+add_definitions(-DUSE_SNOPT)
 
 set(EMTG_LIBRARIES ${EMTG_LIBRARIES} ${SNOPT_LIBRARIES})
+
+endif(USE_SNOPT)
 
 #----------------------------IPOPT Items (optional)-------------------------------------
 if(USE_IPOPT)
@@ -324,6 +329,10 @@ if(USE_IPOPT)
     endif()
     set(EMTG_LIBRARIES ${EMTG_LIBRARIES} ${IPOPT_LIBRARIES})
 endif(USE_IPOPT)
+
+if(NOT USE_SNOPT AND NOT USE_IPOPT)
+    message(FATAL_ERROR "At least one NLP solver must be enabled. Set USE_SNOPT=ON and/or USE_IPOPT=ON.")
+endif()
 
 #-------------------------Boost Items------------------------------
 message(STATUS \n "Now looking for BOOST..")

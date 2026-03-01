@@ -27,7 +27,9 @@
 
 #include "problem.h"
 #include "monotonic_basin_hopping.h"
+#ifdef USE_SNOPT
 #include "SNOPT_interface.h"
+#endif
 #ifdef USE_IPOPT
 #include "IPOPT_interface.h"
 #endif
@@ -183,7 +185,13 @@ namespace EMTG
                     myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
                 else
 #endif
+                {
+#ifdef USE_SNOPT
                     myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+#else
+                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
+#endif
+                }
                 EMTG::Solvers::MBH solver(this, myNLP.get());
 
                 if (options.seed_MBH)
@@ -284,7 +292,13 @@ namespace EMTG
                     myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
                 else
 #endif
+                {
+#ifdef USE_SNOPT
                     myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+#else
+                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
+#endif
+                }
 
                 myNLP->setX0_unscaled(this->options.current_trialX);
                 
@@ -415,7 +429,13 @@ namespace EMTG
                     myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
                 else
 #endif
+                {
+#ifdef USE_SNOPT
                     myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+#else
+                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
+#endif
+                }
                 Solvers::FilamentWalker myFilamentWalker(this, myNLP.get());
                 myFilamentWalker.walk();
 
