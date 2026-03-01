@@ -73,6 +73,10 @@ namespace EMTG
             //run NLP
             virtual void run_NLP(const bool& X0_is_scaled = true) = 0;
 
+            // Solver exit code. SNOPT convention: < 10 means success.
+            // Base class returns 0 (success) for solvers that don't use this.
+            virtual int getInform() const { return 0; }
+
         protected:
             //scaling functions
             inline void scaleX0()

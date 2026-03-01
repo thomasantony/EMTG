@@ -327,6 +327,8 @@ if(USE_IPOPT)
     find_package(IPOPT REQUIRED)
     include_directories(${IPOPT_INCLUDE_DIRS})
     add_definitions(-DUSE_IPOPT)
+    # IPOPT 3.11.x config header omits HAVE_CSTDDEF; add it to fix IpSmartPtr.hpp
+    add_definitions(-DHAVE_CSTDDEF)
     if(IPOPT_DEFINITIONS)
         add_definitions(${IPOPT_DEFINITIONS})
     endif()
