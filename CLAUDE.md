@@ -13,23 +13,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
+### Prerequisites
+
+EMTG requires these dependencies (see `docs/0_Users/build_system/linux_build_system/` for full install instructions):
+
+| Dependency | Purpose | Notes |
+|------------|---------|-------|
+| CSpice N0067 | Ephemeris lookups | Always required. Download from NAIF. |
+| Boost 1.79.0 | filesystem, serialization, system | Always required. |
+| GSL 2.7.0 | Cubic splines (SplineEphem) | Required when `SPLINE_EPHEM=ON` (default). Use the AMPL fork for CMake support. |
+| IPOPT | NLP solver (open-source) | Required when `USE_IPOPT=ON` (default). Install via `brew install ipopt` or `apt install coinor-libipopt-dev`. |
+| SNOPT 7.x | NLP solver (proprietary) | Required when `USE_SNOPT=ON`. Not included in repo. |
+
+### First-Time Setup
+
+`EMTG-Config.cmake` **must exist** before running CMake — it is not in the repository. Create it from the template and set your local dependency paths:
+
 ```bash
-# 1. Configure dependency paths (one-time setup)
 cp EMTG-Config-template.cmake EMTG-Config.cmake
-# Edit EMTG-Config.cmake to set: CSPICE_DIR, BOOST_ROOT, GSL_PATH
-# Set SNOPT_ROOT_DIR if using SNOPT, IPOPT_ROOT_DIR if using IPOPT
+# Edit EMTG-Config.cmake and set:
+#   CSPICE_DIR   — path to CSpice root
+#   BOOST_ROOT   — path to Boost root (and BOOST_INCLUDE_DIR, BOOST_LIBRARY_DIRS)
+#   GSL_PATH     — path to GSL build directory
+#   IPOPT_ROOT_DIR  — only needed if IPOPT is not on the system path
+#   SNOPT_ROOT_DIR  — only needed when USE_SNOPT=ON
+```
 
-# 2. Generate and build (choose your solver configuration)
-cmake -B build                                          # IPOPT only (default)
-cmake -B build -DUSE_SNOPT=ON                           # Both SNOPT and IPOPT
-cmake -B build -DUSE_SNOPT=ON -DUSE_IPOPT=OFF           # SNOPT only (no IPOPT needed)
+### Building
 
-cmake --build build
+```bash
+cmake -B build                           # IPOPT only (default)
+cmake -B build -DUSE_SNOPT=ON            # Both SNOPT and IPOPT
+cmake -B build -DUSE_SNOPT=ON -DUSE_IPOPT=OFF  # SNOPT only
+
+cmake --build build -j$(nproc)
 
 # Build output: bin/EMTGv9
 ```
 
-Default build type is Release. Key CMake options: `USE_SNOPT` (OFF), `USE_IPOPT` (ON), `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `SAFE_SNOPT` (ON), `FAST_EMTG_MATRIX` (ON). At least one of `USE_SNOPT` or `USE_IPOPT` must be enabled. See `CMakeLists.txt` for full list.
+At least one of `USE_SNOPT` or `USE_IPOPT` must be enabled. Other key options: `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `FAST_EMTG_MATRIX` (ON). See `CMakeLists.txt` for the full list.
 
 ## Running
 
