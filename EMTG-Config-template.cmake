@@ -21,6 +21,20 @@ set(CSPICE_DIR /archive/Utilities/CSPICE)
 #If you are on Windows and have installed Visual Fortran, you will need to point to your Visual Fortran library directory
 #    set(INTEL_FORTRAN_DIR "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries_2016.1.146/windows/compiler/lib/intel64")
 
+#---------IPOPT hints (optional)------------
+#If you want to build EMTG with IPOPT support (open-source NLP solver), set USE_IPOPT=ON
+#in your CMake configuration and point IPOPT_ROOT_DIR to your IPOPT installation prefix.
+#IPOPT can be obtained from: https://github.com/coin-or/Ipopt
+#
+#On Ubuntu/Debian, you can install IPOPT via: sudo apt-get install coinor-libipopt-dev
+#On macOS with Homebrew: brew install ipopt
+#For a manual build, configure with --prefix and point IPOPT_ROOT_DIR to that prefix.
+#
+#If IPOPT is installed in a system path and pkg-config can find it, IPOPT_ROOT_DIR
+#may not be needed.
+
+#	set(IPOPT_ROOT_DIR /path/to/ipopt/install)
+
 #-------BOOST HINTS------------------
 #cmake usually has an easy time finding a properly installed boost.  If it cannot find your copy of boost, uncomment the next two lines and 
 #appropriately modify them to point at your boost distribution.

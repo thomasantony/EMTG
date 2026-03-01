@@ -59,6 +59,7 @@ option(SPLINE_EPHEM "Enable SplineEphem" ON)
 option(BUILD_EMTG_TESTBED "Build the EMTG testing framework" OFF)
 option(BUILD_PROPULATOR "Build the Propulator" OFF)
 option(BUILD_PYHARDWARE "Build PyHardware" OFF)
+option(USE_IPOPT "Build with IPOPT solver support" OFF)
 
 # We want Background mode to default to ON for NavLab runs
 if (MSVC)
@@ -310,6 +311,19 @@ endif()
 include_directories(${SNOPT_INCLUDE_DIR})
 
 set(EMTG_LIBRARIES ${EMTG_LIBRARIES} ${SNOPT_LIBRARIES})
+
+#----------------------------IPOPT Items (optional)-------------------------------------
+if(USE_IPOPT)
+    message(STATUS \n "Now checking for IPOPT...")
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+    find_package(IPOPT REQUIRED)
+    include_directories(${IPOPT_INCLUDE_DIRS})
+    add_definitions(-DUSE_IPOPT)
+    if(IPOPT_DEFINITIONS)
+        add_definitions(${IPOPT_DEFINITIONS})
+    endif()
+    set(EMTG_LIBRARIES ${EMTG_LIBRARIES} ${IPOPT_LIBRARIES})
+endif(USE_IPOPT)
 
 #-------------------------Boost Items------------------------------
 message(STATUS \n "Now looking for BOOST..")
