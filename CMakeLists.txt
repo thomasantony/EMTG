@@ -43,11 +43,16 @@ endif(NOT IS_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 #compiler-time Define-level options  for EMTG
 
+option(USE_SNOPT "Build with SNOPT solver support" OFF)
+option(USE_IPOPT "Build with IPOPT solver support" ON)
+
 # Optional user override of the snopt directory specified in the EMTG-Config.cmake file
+if(USE_SNOPT)
 set(SNOPTDIR_OVRD "${SNOPT_ROOT_DIR}" CACHE PATH "SNOPT Root Directory") # Do not use the FORCE command here so the value the user enters in GUI is preserved
 if (NOT (IS_DIRECTORY ${SNOPTDIR_OVRD}))
 	# Throw an error if the directory specified does not exist
 	message(FATAL_ERROR "SNOPT directory specified (${SNOPTDIR_OVRD}) does not exist")
+endif()
 endif()
 
 option(QUIET_SNOPT "Minimizes the SNOPT output to the log." OFF)
@@ -59,8 +64,6 @@ option(SPLINE_EPHEM "Enable SplineEphem" ON)
 option(BUILD_EMTG_TESTBED "Build the EMTG testing framework" OFF)
 option(BUILD_PROPULATOR "Build the Propulator" OFF)
 option(BUILD_PYHARDWARE "Build PyHardware" OFF)
-option(USE_SNOPT "Build with SNOPT solver support" OFF)
-option(USE_IPOPT "Build with IPOPT solver support" ON)
 
 # We want Background mode to default to ON for NavLab runs
 if (MSVC)
