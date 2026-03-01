@@ -15,7 +15,16 @@ set(INNER_LOOP_SOURCE ${INNER_LOOP_SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/EMTG_inne
                                            ${CMAKE_CURRENT_SOURCE_DIR}/NLPoptions.cpp
                                            ${CMAKE_CURRENT_SOURCE_DIR}/NLP_interface.cpp
                                            ${CMAKE_CURRENT_SOURCE_DIR}/SNOPT_interface.cpp)
-                                           
+
+if(USE_IPOPT)
+    set(INNER_LOOP_HEADERS ${INNER_LOOP_HEADERS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/IPOPT_interface.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/EMTG_IPOPT_NLP.h)
+    set(INNER_LOOP_SOURCE ${INNER_LOOP_SOURCE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/IPOPT_interface.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/EMTG_IPOPT_NLP.cpp)
+endif()
+
 set(INNER_LOOP_FILES ${INNER_LOOP_FILES} ${INNER_LOOP_HEADERS} ${INNER_LOOP_SOURCE} PARENT_SCOPE)
     
 
