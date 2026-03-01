@@ -447,6 +447,97 @@ namespace EMTG
                         break;
         }
 #endif
+                    case 0: //static Keplerian propagation
+                    {
+                        // Find the central body in the bodies list to get its heliocentric orbital elements
+                        double CB_SMA = 0.0, CB_ECC = 0.0, CB_INC = 0.0, CB_RAAN = 0.0, CB_AOP = 0.0, CB_MA = 0.0;
+                        double CB_ref_epoch = 0.0;
+                        double sun_mu = 1.32712440018e+11; // default Sun GM
+                        bool found_CB = false;
+
+                        for (const auto& b : this->bodies)
+                        {
+                            if (b.spice_ID == this->central_body_SPICE_ID)
+                            {
+                                CB_SMA  = b.SMA;
+                                CB_ECC  = b.ECC;
+                                CB_INC  = b.INC;
+                                CB_RAAN = b.RAAN;
+                                CB_AOP  = b.AOP;
+                                CB_MA   = b.MA;
+                                CB_ref_epoch = b.reference_epoch;
+                                found_CB = true;
+                            }
+                            if (b.spice_ID == 10) // Sun
+                                sun_mu = b.mu;
+                        }
+
+                        if (!found_CB)
+                        {
+                            std::cout << "Warning: Central body SPICE ID " << this->central_body_SPICE_ID
+                                      << " not found in body list for static Keplerian propagation." << std::endl;
+                            for (size_t k = 0; k < (need_deriv ? 12 : 6); ++k)
+                                state[k] = 0.0;
+                            break;
+                        }
+
+                        // Mean motion (rad/s) using Sun's GM
+                        double n_motion = sqrt(sun_mu / (CB_SMA * CB_SMA * CB_SMA));
+
+                        // Time since reference epoch (seconds)
+                        double delta_t = epoch _GETVALUE - CB_ref_epoch * 86400.0;
+
+                        // Propagate mean anomaly (INC/RAAN/AOP/MA already in radians from body constructor)
+                        double M = fmod(CB_MA + n_motion * delta_t, math::TwoPI);
+                        if (M < 0.0) M += math::TwoPI;
+
+                        // Solve Kepler's equation via Newton's method
+                        double e = CB_ECC;
+                        double E = M;
+                        for (int iter = 0; iter < 50; ++iter)
+                        {
+                            double dE = (M - E + e * sin(E)) / (1.0 - e * cos(E));
+                            E += dE;
+                            if (fabs(dE) < 1.0e-12) break;
+                        }
+
+                        double TA = 2.0 * atan2(sqrt(1.0 + e) * sin(E / 2.0), sqrt(1.0 - e) * cos(E / 2.0));
+
+                        math::Matrix<double> COE_state(6, 1);
+                        COE_state(0) = CB_SMA;
+                        COE_state(1) = CB_ECC;
+                        COE_state(2) = CB_INC;
+                        COE_state(3) = CB_RAAN;
+                        COE_state(4) = CB_AOP;
+                        COE_state(5) = TA;
+
+                        math::Matrix<double> state_matrix(6, 1);
+                        math::Matrix<double> dummy_derivs(6, 6, 0.0);
+                        EMTG::Astrodynamics::COE2inertial(COE_state, sun_mu, state_matrix, false, dummy_derivs);
+
+                        for (size_t k = 0; k < 6; ++k)
+                            state[k] = state_matrix(k);
+
+                        if (need_deriv)
+                        {
+                            double M2 = fmod(CB_MA + n_motion * (delta_t + 10.0), math::TwoPI);
+                            if (M2 < 0.0) M2 += math::TwoPI;
+                            double E2 = M2;
+                            for (int iter = 0; iter < 50; ++iter)
+                            {
+                                double dE = (M2 - E2 + e * sin(E2)) / (1.0 - e * cos(E2));
+                                E2 += dE;
+                                if (fabs(dE) < 1.0e-12) break;
+                            }
+                            double TA2 = 2.0 * atan2(sqrt(1.0 + e) * sin(E2 / 2.0), sqrt(1.0 - e) * cos(E2 / 2.0));
+                            COE_state(5) = TA2;
+                            math::Matrix<double> state_matrix2(6, 1);
+                            EMTG::Astrodynamics::COE2inertial(COE_state, sun_mu, state_matrix2, false, dummy_derivs);
+                            for (size_t k = 0; k < 6; ++k)
+                                state[k + 6] = (state_matrix2(k) - state_matrix(k)) / 10.0;
+                        }
+                        break;
+                    }
                     default:
                         std::cout << "Central body ephemeris source must be SPICE or SplineEphem" << std::endl;
     }//switch on ephemeris source

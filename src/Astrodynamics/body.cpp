@@ -333,6 +333,72 @@ namespace EMTG
                                                  + " with respect to " + std::to_string(this->central_body_spice_ID) + " on epoch " + std::to_string(epoch _GETVALUE / 86400.0) + ".");
                     }
                     break;
+
+                default: //static Keplerian propagation
+                {
+                    // Compute mean motion (rad/s)
+                    double n_motion = sqrt(this->universe_mu / (this->SMA * this->SMA * this->SMA));
+
+                    // Time since reference epoch (seconds)
+                    double delta_t = epoch _GETVALUE - this->reference_epoch * 86400.0;
+
+                    // Propagate mean anomaly and normalize to [0, 2*pi)
+                    double M = fmod(this->MA + n_motion * delta_t, math::TwoPI);
+                    if (M < 0.0) M += math::TwoPI;
+
+                    // Solve Kepler's equation: M = E - e*sin(E) via Newton's method
+                    double e = this->ECC;
+                    double E = M;
+                    for (int iter = 0; iter < 50; ++iter)
+                    {
+                        double dE = (M - E + e * sin(E)) / (1.0 - e * cos(E));
+                        E += dE;
+                        if (fabs(dE) < 1.0e-12) break;
+                    }
+
+                    // Convert eccentric anomaly to true anomaly
+                    double TA = 2.0 * atan2(sqrt(1.0 + e) * sin(E / 2.0), sqrt(1.0 - e) * cos(E / 2.0));
+
+                    // Build COE state [SMA, ECC, INC, RAAN, AOP, TA] and convert to Cartesian
+                    math::Matrix<double> COE_state(6, 1);
+                    COE_state(0) = this->SMA;
+                    COE_state(1) = this->ECC;
+                    COE_state(2) = this->INC;
+                    COE_state(3) = this->RAAN;
+                    COE_state(4) = this->AOP;
+                    COE_state(5) = TA;
+
+                    math::Matrix<double> state_matrix(6, 1);
+                    math::Matrix<double> dummy_derivs(6, 6, 0.0);
+                    EMTG::Astrodynamics::COE2inertial(COE_state, this->universe_mu, state_matrix, false, dummy_derivs);
+
+                    for (size_t i = 0; i < 6; ++i)
+                        state[i] = state_matrix(i);
+
+                    if (need_deriv)
+                    {
+                        // Compute time derivative by finite differencing (dt = 10 seconds)
+                        double M2 = fmod(this->MA + n_motion * (delta_t + 10.0), math::TwoPI);
+                        if (M2 < 0.0) M2 += math::TwoPI;
+
+                        double E2 = M2;
+                        for (int iter = 0; iter < 50; ++iter)
+                        {
+                            double dE = (M2 - E2 + e * sin(E2)) / (1.0 - e * cos(E2));
+                            E2 += dE;
+                            if (fabs(dE) < 1.0e-12) break;
+                        }
+
+                        double TA2 = 2.0 * atan2(sqrt(1.0 + e) * sin(E2 / 2.0), sqrt(1.0 - e) * cos(E2 / 2.0));
+                        COE_state(5) = TA2;
+                        math::Matrix<double> state_matrix2(6, 1);
+                        EMTG::Astrodynamics::COE2inertial(COE_state, this->universe_mu, state_matrix2, false, dummy_derivs);
+
+                        for (size_t i = 0; i < 6; ++i)
+                            state[i + 6] = (state_matrix2(i) - state_matrix(i)) / 10.0;
+                    }
+                    break;
+                }
                     }
 
             return 0;

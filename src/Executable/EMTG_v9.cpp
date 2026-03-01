@@ -279,6 +279,7 @@ int main(int argc, char* argv[])
         //add every body that will we used in the mission to the SplineUniverse
 #ifdef SPLINE_EPHEM
         SplineUniverse_keyList.clear();
+        if (options.ephemeris_source == 2)
         try
         {
             //double earliest_possible_epoch = options.launch_window_open_date + options.Journeys.front().wait_time_bounds[0];
