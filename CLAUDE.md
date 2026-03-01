@@ -20,16 +20,16 @@ cp EMTG-Config-template.cmake EMTG-Config.cmake
 # Set SNOPT_ROOT_DIR if using SNOPT, IPOPT_ROOT_DIR if using IPOPT
 
 # 2. Generate and build (choose your solver configuration)
-cmake -B build                                          # SNOPT only (default)
-cmake -B build -DUSE_IPOPT=ON                           # Both SNOPT and IPOPT
-cmake -B build -DUSE_SNOPT=OFF -DUSE_IPOPT=ON           # IPOPT only (no SNOPT needed)
+cmake -B build                                          # IPOPT only (default)
+cmake -B build -DUSE_SNOPT=ON                           # Both SNOPT and IPOPT
+cmake -B build -DUSE_SNOPT=ON -DUSE_IPOPT=OFF           # SNOPT only (no IPOPT needed)
 
 cmake --build build
 
 # Build output: bin/EMTGv9
 ```
 
-Default build type is Release. Key CMake options: `USE_SNOPT` (ON), `USE_IPOPT` (OFF), `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `SAFE_SNOPT` (ON), `FAST_EMTG_MATRIX` (ON). At least one of `USE_SNOPT` or `USE_IPOPT` must be enabled. See `CMakeLists.txt` for full list.
+Default build type is Release. Key CMake options: `USE_SNOPT` (OFF), `USE_IPOPT` (ON), `SPLINE_EPHEM` (ON), `BACKGROUND_MODE` (ON on Unix), `SAFE_SNOPT` (ON), `FAST_EMTG_MATRIX` (ON). At least one of `USE_SNOPT` or `USE_IPOPT` must be enabled. See `CMakeLists.txt` for full list.
 
 ## Running
 

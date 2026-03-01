@@ -59,8 +59,8 @@ option(SPLINE_EPHEM "Enable SplineEphem" ON)
 option(BUILD_EMTG_TESTBED "Build the EMTG testing framework" OFF)
 option(BUILD_PROPULATOR "Build the Propulator" OFF)
 option(BUILD_PYHARDWARE "Build PyHardware" OFF)
-option(USE_SNOPT "Build with SNOPT solver support" ON)
-option(USE_IPOPT "Build with IPOPT solver support" OFF)
+option(USE_SNOPT "Build with SNOPT solver support" OFF)
+option(USE_IPOPT "Build with IPOPT solver support" ON)
 
 # We want Background mode to default to ON for NavLab runs
 if (MSVC)
