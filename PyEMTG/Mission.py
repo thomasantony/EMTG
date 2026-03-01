@@ -1263,7 +1263,8 @@ class Mission(object):
         
         #can I test the current mission? did it actually load anything? if not, return
         if not hasattr(self, 'Journeys'):
-            comparison = comparison.append({'Output Name' : 'No Journeys!', 'Match' : False}, ignore_index = True)
+            from pandas import concat as pd_concat
+            comparison = pd_concat([comparison, DataFrame([{'Output Name' : 'No Journeys!', 'Match' : False}])], ignore_index=True)
             comparison.to_csv(csv_file_name, index = False)
             return False, comparison
 			
@@ -1271,7 +1272,8 @@ class Mission(object):
         #Make sure the number of journeys are the same between both cases (if they aren't then the missions are set up differently and a comparison is likely meaningless)
         #NOTE: The number of mission events may vary between solutions with the same journey structure so we worry about mission event mismatches later.
         if len(baseline.Journeys) != len(self.Journeys):
-            comparison = comparison.append({'Output Name' : 'Journey Mismatch!', 'Match' : False}, ignore_index = True)
+            from pandas import concat as pd_concat
+            comparison = pd_concat([comparison, DataFrame([{'Output Name' : 'Journey Mismatch!', 'Match' : False}])], ignore_index=True)
             comparison.to_csv(csv_file_name, index=False)
             return False, comparison
 
@@ -1422,9 +1424,10 @@ class Mission(object):
 
             n_mevents = n_baseline_mevents
             if (n_baseline_mevents != n_new_mevents):
-                comparison = comparison.append({'Output Name': 'Journey[' + str(i) + '] MissionEvent Mismatch',
+                from pandas import concat as pd_concat
+                comparison = pd_concat([comparison, DataFrame([{'Output Name': 'Journey[' + str(i) + '] MissionEvent Mismatch',
                                                 'Baseline Value': n_baseline_mevents, 'New Value': n_new_mevents,
-                                                'Error': abs(n_new_mevents - n_baseline_mevents), 'Match': False})
+                                                'Error': abs(n_new_mevents - n_baseline_mevents), 'Match': False}])], ignore_index=True)
                 n_mevents = min([n_baseline_mevents, n_new_mevents])
 
             for j in range(n_mevents):
@@ -1552,9 +1555,9 @@ class Mission(object):
             
         #If there are any attributes in the attributes_only_in_xxx lists then append them to comparison df
         if len(attrs_only_in_baseline) != 0:
-            comparison = comparison.append({'Output Name':'Attributes only in Baseline','Baseline Value':attributes_only_in_baseline,'Match':False}, ignore_index = True)
+            comparison = concat([comparison, DataFrame([{'Output Name':'Attributes only in Baseline','Baseline Value':attrs_only_in_baseline,'Match':False}])], ignore_index=True)
         if len(attrs_only_in_new) != 0:
-            comparison = comparison.append({'Output Name':'Attributes only in New','New Value':attributes_only_in_new,'Match':False}, ignore_index = True)
+            comparison = concat([comparison, DataFrame([{'Output Name':'Attributes only in New','New Value':attrs_only_in_new,'Match':False}])], ignore_index=True)
 
                    
         #Return a value of True if the missions are in complete agreement
