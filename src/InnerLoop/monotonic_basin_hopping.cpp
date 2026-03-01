@@ -31,17 +31,16 @@
 #include "monotonic_basin_hopping.h"
 #include "EMTG_math.h"
 
-#include "snoptProblemExtension.h"
 
 namespace EMTG { namespace Solvers {
     //constructors
     MBH::MBH() {}
 
     MBH::MBH(EMTG::problem* myProblem,
-        SNOPT_interface* mySNOPT)
+        NLP_interface* myNLP)
     {
         //initialize the MBH variables
-        initialize(myProblem, mySNOPT);
+        initialize(myProblem, myNLP);
 
         //search through the problem object and identify which decision variables are flight time variables
         if (this->myProblem->options.MBH_time_hop_probability > 0.0)
@@ -71,10 +70,10 @@ namespace EMTG { namespace Solvers {
     //method to initialize the MBH solver
     //resets all storage fields
     void MBH::initialize(EMTG::problem* myProblem,
-        SNOPT_interface* mySNOPT)
+        NLP_interface* myNLP)
     {
         this->myProblem = myProblem;
-        this->mySNOPT = mySNOPT;
+        this->myNLP = myNLP;
         
         //size the storage vectors
         this->archive.clear();
@@ -87,7 +86,7 @@ namespace EMTG { namespace Solvers {
         //clear the scores
         this->Jincumbent = EMTG::math::LARGE;
         this->JGlobalIncumbent = EMTG::math::LARGE;
-		this->mySNOPT->setJGlobalIncumbent(EMTG::math::LARGE);
+		this->myNLP->setJGlobalIncumbent(EMTG::math::LARGE);
 
         this->FeasibilityIncumbent = EMTG::math::LARGE;
 
@@ -295,7 +294,7 @@ namespace EMTG { namespace Solvers {
         for (size_t Xindex = 0; Xindex < this->myProblem->total_number_of_NLP_parameters; ++Xindex)
             this->X_after_hop_unscaled[Xindex] = this->X_after_hop[Xindex] * this->myProblem->X_scale_factors[Xindex];
         
-        this->mySNOPT->setX0_unscaled(this->X_after_hop_unscaled);
+        this->myNLP->setX0_unscaled(this->X_after_hop_unscaled);
 
         //print the sparsity file and XF files if this is the first pass, otherwise don't to save time and hard drive cycles
         if (!this->printed_sparsity)
@@ -317,14 +316,9 @@ namespace EMTG { namespace Solvers {
             }
         }
 
-        if (this->myProblem->options.NLP_solver_type == 1)
         {
-            std::cout << "WORHP interface is deprecated" << std::endl;
-        }
-        else
-        {
-            //run SNOPT
-            
+            //run NLP solver
+
             try
             {
 				if (this->myProblem->options.enable_Scalatron)
@@ -340,9 +334,9 @@ namespace EMTG { namespace Solvers {
 						this->myProblem->G,
 						0);
 				}
-                this->mySNOPT->run_NLP(false);
+                this->myNLP->run_NLP(false);
 
-                this->X_after_slide_unscaled = this->mySNOPT->getX_unscaled();
+                this->X_after_slide_unscaled = this->myNLP->getX_unscaled();
                 for (size_t Xindex = 0; Xindex < this->myProblem->total_number_of_NLP_parameters; ++Xindex)
                 {
                     this->X_after_slide[Xindex] = this->X_after_slide_unscaled[Xindex] / this->myProblem->X_scale_factors[Xindex];
@@ -353,7 +347,7 @@ namespace EMTG { namespace Solvers {
             {
                 std::cout << error.what() << std::endl;
                 //prevent a crash, yay
-                this->X_after_slide_unscaled = this->mySNOPT->getX_unscaled();
+                this->X_after_slide_unscaled = this->myNLP->getX_unscaled();
                 for (size_t Xindex = 0; Xindex < this->myProblem->total_number_of_NLP_parameters; ++Xindex)
                 {
                     this->X_after_slide[Xindex] = this->X_after_slide_unscaled[Xindex] / this->myProblem->X_scale_factors[Xindex];
@@ -592,7 +586,7 @@ namespace EMTG { namespace Solvers {
             //Step 2: apply the slide operator      
             this->slide();
             double ObjectiveFunctionValue = this->myProblem->F[0];
-            std::vector<double> Xunscaled = this->mySNOPT->getX_unscaled();
+            std::vector<double> Xunscaled = this->myNLP->getX_unscaled();
             std::vector<double> F = this->myProblem->F;
 
             //Step 3: determine if the new trial point is feasible and if so, operate on it
@@ -640,7 +634,7 @@ namespace EMTG { namespace Solvers {
             else
             {
                 if ((normalized_feasibility < myProblem->options.snopt_feasibility_tolerance && decision_variable_infeasibility < myProblem->options.snopt_feasibility_tolerance)
-                    || this->mySNOPT->getInform() < 10)
+                    || this->myNLP->getInform() < 10)
                     isFeasible = true;
             }
 
@@ -731,7 +725,7 @@ namespace EMTG { namespace Solvers {
                 if (ObjectiveFunctionValue < this->JGlobalIncumbent)
                 {
                     this->JGlobalIncumbent = ObjectiveFunctionValue;
-					this->mySNOPT->setJGlobalIncumbent(ObjectiveFunctionValue);
+					this->myNLP->setJGlobalIncumbent(ObjectiveFunctionValue);
                     this->X_global_incumbent = this->X_after_slide;
                     myProblem->Xopt = this->X_after_slide_unscaled;
                     myProblem->best_cost = this->JGlobalIncumbent;
