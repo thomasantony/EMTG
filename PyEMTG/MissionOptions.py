@@ -36,7 +36,7 @@ class MissionOptions(object):
         self.mission_type = 2
         """mission type. Choices are 0 - MGALTS, 1 - FBLTS, 2 - MGALT, 3 - FBLT, 4 - PSBI, 5 - PSFB, 6 - MGAnDSMs, 7 - CoastPhase, 8 - SundmanCoastPhase, 9 - variable phase type, 10 - ProbeEntryPhase, 11 - ControlLawThrustPhase"""
         self.NLP_solver_type = 0
-        """NLP solver type. Choices are 0 - SNOPT, 1 - WORHP"""
+        """NLP solver type. Choices are 0 - SNOPT, 1 - WORHP, 2 - IPOPT"""
         self.NLP_solver_mode = 1
         """NLP solver mode. Choices are 0 -  find feasible point only, 1 - find optimal solution, 2 - satisfy equality constraints"""
         self.quiet_NLP = 1
@@ -75,6 +75,18 @@ class MissionOptions(object):
         """NLP minor iterations"""
         self.snopt_max_run_time = 15
         """NLP max run time (seconds)"""
+        self.ipopt_max_iterations = -1
+        """IPOPT max iterations (-1 uses snopt_major_iterations)"""
+        self.ipopt_convergence_tolerance = -1
+        """IPOPT convergence tolerance (-1 uses snopt_optimality_tolerance)"""
+        self.ipopt_constraint_violation_tolerance = -1
+        """IPOPT constraint violation tolerance (-1 uses snopt_feasibility_tolerance)"""
+        self.ipopt_max_run_time = -1
+        """IPOPT max CPU time in seconds (-1 uses snopt_max_run_time)"""
+        self.ipopt_mu_strategy = 1
+        """IPOPT barrier parameter strategy. Choices are 0 - monotone, 1 - adaptive"""
+        self.ipopt_print_level = -1
+        """IPOPT print level 0-12 (-1 auto from quiet_NLP)"""
         self.enable_Scalatron = 1
         """Enable Scalatron?"""
         self.enable_NLP_chaperone = 1
@@ -370,16 +382,16 @@ class MissionOptions(object):
    
     #************************************************************************************parse
     def parse_mission(self, optionsFileName):
-        self.filename = optionsFileName.replace("\ufeff", "")
+        self.filename = optionsFileName
         
         inputFile = []
         lineNumber = 0
         from os.path import isfile
         if isfile(self.filename):
-            inputFile = open(self.filename, "r")
+            inputFile = open(optionsFileName, "r")
             self.success = 1
         else:
-            print("Python is unable to open", self.filename)
+            print("Unable to open", optionsFileName, "EMTG Error")
             return
         
         while True:
@@ -427,9 +439,7 @@ class MissionOptions(object):
                         self.RLA_bounds = [float(entry) for entry in linecell[1:]]
                   
                     elif linecell[0] == "mission_type":
-                        # Check for mission types that are not supported in PyEMTG
                         self.mission_type = int(linecell[1])
-                        if (self.mission_type < 2): print("WARNING: The selected options file contains an unsupported mission type. The supported mission types are MGALT, FBLT, PSBI, PSFB, MGAnDSMs, CoastPhase, SundmanCoastPhase, variable phase type, ProbeEntryPhase, and ControlLawThrustPhase. Please select one of these types from the Global Mission Options tab.")
                   
                     elif linecell[0] == "NLP_solver_type":
                         self.NLP_solver_type = int(linecell[1])
@@ -490,6 +500,24 @@ class MissionOptions(object):
                   
                     elif linecell[0] == "snopt_max_run_time":
                         self.snopt_max_run_time = int(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_max_iterations":
+                        self.ipopt_max_iterations = int(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_convergence_tolerance":
+                        self.ipopt_convergence_tolerance = float(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_constraint_violation_tolerance":
+                        self.ipopt_constraint_violation_tolerance = float(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_max_run_time":
+                        self.ipopt_max_run_time = int(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_mu_strategy":
+                        self.ipopt_mu_strategy = int(linecell[1])
+                  
+                    elif linecell[0] == "ipopt_print_level":
+                        self.ipopt_print_level = int(linecell[1])
                   
                     elif linecell[0] == "enable_Scalatron":
                         self.enable_Scalatron = int(linecell[1])
@@ -552,9 +580,7 @@ class MissionOptions(object):
                         self.propagatorType = int(linecell[1])
                   
                     elif linecell[0] == "integratorType":
-                        # Check for integrator types that are not supported in PyEMTG
                         self.integratorType = int(linecell[1])
-                        if (self.integratorType < 1): print("WARNING: The selected options file contains an unsupported integrator type. The supported integrator type is rk8 fixed step. Please select this type from the Physics Options tab.")
                   
                     elif linecell[0] == "integrator_tolerance":
                         self.integrator_tolerance = float(linecell[1])
@@ -985,7 +1011,7 @@ class MissionOptions(object):
                 optionsFile.write("mission_type " + str(self.mission_type) + "\n")
     
             if (self.NLP_solver_type != 0 or writeAll):
-                optionsFile.write("#NLP solver type\n#0: SNOPT\n#1: WORHP\n")
+                optionsFile.write("#NLP solver type\n#0: SNOPT\n#1: WORHP\n#2: IPOPT\n")
                 optionsFile.write("NLP_solver_type " + str(self.NLP_solver_type) + "\n")
     
             if (self.NLP_solver_mode != 1 or writeAll):
@@ -1063,6 +1089,30 @@ class MissionOptions(object):
             if (self.snopt_max_run_time != 15 or writeAll):
                 optionsFile.write("#NLP max run time (seconds)\n")
                 optionsFile.write("snopt_max_run_time " + str(self.snopt_max_run_time) + "\n")
+    
+            if (self.ipopt_max_iterations != -1 or writeAll):
+                optionsFile.write("#IPOPT max iterations (-1 uses snopt_major_iterations)\n")
+                optionsFile.write("ipopt_max_iterations " + str(self.ipopt_max_iterations) + "\n")
+    
+            if (self.ipopt_convergence_tolerance != -1 or writeAll):
+                optionsFile.write("#IPOPT convergence tolerance (-1 uses snopt_optimality_tolerance)\n")
+                optionsFile.write("ipopt_convergence_tolerance " + str(self.ipopt_convergence_tolerance) + "\n")
+    
+            if (self.ipopt_constraint_violation_tolerance != -1 or writeAll):
+                optionsFile.write("#IPOPT constraint violation tolerance (-1 uses snopt_feasibility_tolerance)\n")
+                optionsFile.write("ipopt_constraint_violation_tolerance " + str(self.ipopt_constraint_violation_tolerance) + "\n")
+    
+            if (self.ipopt_max_run_time != -1 or writeAll):
+                optionsFile.write("#IPOPT max CPU time in seconds (-1 uses snopt_max_run_time)\n")
+                optionsFile.write("ipopt_max_run_time " + str(self.ipopt_max_run_time) + "\n")
+    
+            if (self.ipopt_mu_strategy != 1 or writeAll):
+                optionsFile.write("#IPOPT barrier parameter strategy\n#0: monotone\n#1: adaptive\n")
+                optionsFile.write("ipopt_mu_strategy " + str(self.ipopt_mu_strategy) + "\n")
+    
+            if (self.ipopt_print_level != -1 or writeAll):
+                optionsFile.write("#IPOPT print level 0-12 (-1 auto from quiet_NLP)\n")
+                optionsFile.write("ipopt_print_level " + str(self.ipopt_print_level) + "\n")
     
             if (self.enable_Scalatron != 1 or writeAll):
                 optionsFile.write("#Enable Scalatron?\n")
@@ -1470,10 +1520,10 @@ class MissionOptions(object):
                 optionsFile.write("#state representation for parallel shooting constraints (Cartesian or same as encoded states)\n")
                 optionsFile.write("ParallelShootingConstraintStateRepresentation " + str(self.ParallelShootingConstraintStateRepresentation) + "\n")
     
-			# Always output the non-default printing option
-            optionsFile.write("#Write only options that are *not* default into the .emtgopt file?\n")
-            optionsFile.write("print_only_non_default_options " + str(int(self.print_only_non_default_options)) + "\n")
-
+            if (self.print_only_non_default_options != 0 or writeAll):
+                optionsFile.write("#Write only options that are *not* default into the .emtgopt file?\n")
+                optionsFile.write("print_only_non_default_options " + str(int(self.print_only_non_default_options)) + "\n")
+    
             if (self.output_file_frame != 1 or writeAll):
                 optionsFile.write("#reference frame for output file (0: J2000_ICRF, 1: J2000_BCI, 2: J2000_BCF, 3: TrueOfDate_BCI, 4: TrueOfDate_BCF, 5: Principle Axes, 6: Topocentric, 7: Polar)\n")
                 optionsFile.write("output_file_frame " + str(self.output_file_frame) + "\n")
@@ -1622,7 +1672,7 @@ class MissionOptions(object):
                 optionsFile.write("#Check derivatives using NLP finite differencing?\n")
                 optionsFile.write("check_derivatives " + str(int(self.check_derivatives)) + "\n")
     
-            optionsFile.write("\n#Enter any user data that should be appended to the .emtg file.\n")
+            optionsFile.write("#Enter any user data that should be appended to the .emtg file.\n")
             optionsFile.write("#This is typically used in python wrappers\n")
             optionsFile.write("user_data ")
             first_entry = True

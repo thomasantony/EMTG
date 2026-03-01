@@ -85,7 +85,7 @@ namespace EMTG
         std::vector<double> DLA_bounds;//DLA in degrees
         std::vector<double> RLA_bounds;//RLA in degrees
         PhaseType mission_type;//mission type. Choices are 0 - MGALTS, 1 - FBLTS, 2 - MGALT, 3 - FBLT, 4 - PSBI, 5 - PSFB, 6 - MGAnDSMs, 7 - CoastPhase, 8 - SundmanCoastPhase, 9 - variable phase type, 10 - ProbeEntryPhase, 11 - ControlLawThrustPhase
-        int NLP_solver_type;//NLP solver type. Choices are 0 - SNOPT, 1 - WORHP
+        int NLP_solver_type;//NLP solver type. Choices are 0 - SNOPT, 1 - WORHP, 2 - IPOPT
         NLPMode NLP_solver_mode;//NLP solver mode. Choices are 0 -  find feasible point only, 1 - find optimal solution, 2 - satisfy equality constraints
         bool quiet_NLP;//Quiet NLP solver?
         bool ACE_feasible_point_finder;//Enable ACE feasible point finder?
@@ -105,6 +105,12 @@ namespace EMTG
         size_t snopt_major_iterations;//NLP major iterations
         size_t snopt_minor_iterations;//NLP minor iterations
         int snopt_max_run_time;//NLP max run time (seconds)
+        int ipopt_max_iterations;//IPOPT max iterations (-1 uses snopt_major_iterations)
+        double ipopt_convergence_tolerance;//IPOPT convergence tolerance (-1 uses snopt_optimality_tolerance)
+        double ipopt_constraint_violation_tolerance;//IPOPT constraint violation tolerance (-1 uses snopt_feasibility_tolerance)
+        int ipopt_max_run_time;//IPOPT max CPU time in seconds (-1 uses snopt_max_run_time)
+        int ipopt_mu_strategy;//IPOPT barrier parameter strategy. Choices are 0 - monotone, 1 - adaptive
+        int ipopt_print_level;//IPOPT print level 0-12 (-1 auto from quiet_NLP)
         bool enable_Scalatron;//Enable Scalatron?
         bool enable_NLP_chaperone;//Enable NLP chaperone?
         bool seed_MBH;//Seed MBH?
@@ -288,6 +294,18 @@ namespace EMTG
         size_t snopt_minor_iterations_upperBound;
         int snopt_max_run_time_lowerBound;
         int snopt_max_run_time_upperBound;
+        int ipopt_max_iterations_lowerBound;
+        int ipopt_max_iterations_upperBound;
+        double ipopt_convergence_tolerance_lowerBound;
+        double ipopt_convergence_tolerance_upperBound;
+        double ipopt_constraint_violation_tolerance_lowerBound;
+        double ipopt_constraint_violation_tolerance_upperBound;
+        int ipopt_max_run_time_lowerBound;
+        int ipopt_max_run_time_upperBound;
+        int ipopt_mu_strategy_lowerBound;
+        int ipopt_mu_strategy_upperBound;
+        int ipopt_print_level_lowerBound;
+        int ipopt_print_level_upperBound;
         double NLP_objective_goal_lowerBound;
         double NLP_objective_goal_upperBound;
         int NLP_write_output_check_time_lowerBound;

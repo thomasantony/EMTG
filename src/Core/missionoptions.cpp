@@ -74,6 +74,12 @@ namespace EMTG
         this->snopt_major_iterations = 8000;
         this->snopt_minor_iterations = 500;
         this->snopt_max_run_time = 15;
+        this->ipopt_max_iterations = -1;
+        this->ipopt_convergence_tolerance = -1;
+        this->ipopt_constraint_violation_tolerance = -1;
+        this->ipopt_max_run_time = -1;
+        this->ipopt_mu_strategy = 1;
+        this->ipopt_print_level = -1;
         this->enable_Scalatron = (bool) 1;
         this->enable_NLP_chaperone = (bool) 1;
         this->seed_MBH = (bool) 0;
@@ -226,7 +232,7 @@ namespace EMTG
         this->mission_type_lowerBound = (PhaseType) 0;
         this->mission_type_upperBound = (PhaseType) 11;
         this->NLP_solver_type_lowerBound = 0;
-        this->NLP_solver_type_upperBound = 1;
+        this->NLP_solver_type_upperBound = 2;
         this->NLP_solver_mode_lowerBound = (NLPMode) 0;
         this->NLP_solver_mode_upperBound = (NLPMode) 2;
         this->MBH_max_not_improve_lowerBound = 1;
@@ -255,6 +261,18 @@ namespace EMTG
         this->snopt_minor_iterations_upperBound = SIZE_MAX;
         this->snopt_max_run_time_lowerBound = 0;
         this->snopt_max_run_time_upperBound = INT_MAX;
+        this->ipopt_max_iterations_lowerBound = -1;
+        this->ipopt_max_iterations_upperBound = INT_MAX;
+        this->ipopt_convergence_tolerance_lowerBound = -1;
+        this->ipopt_convergence_tolerance_upperBound = 1;
+        this->ipopt_constraint_violation_tolerance_lowerBound = -1;
+        this->ipopt_constraint_violation_tolerance_upperBound = 1;
+        this->ipopt_max_run_time_lowerBound = -1;
+        this->ipopt_max_run_time_upperBound = INT_MAX;
+        this->ipopt_mu_strategy_lowerBound = 0;
+        this->ipopt_mu_strategy_upperBound = 1;
+        this->ipopt_print_level_lowerBound = -1;
+        this->ipopt_print_level_upperBound = 12;
         this->NLP_objective_goal_lowerBound = -math::LARGE;
         this->NLP_objective_goal_upperBound = math::LARGE;
         this->NLP_write_output_check_time_lowerBound = 1;
@@ -781,6 +799,72 @@ namespace EMTG
             if (this->snopt_max_run_time < this->snopt_max_run_time_lowerBound || this->snopt_max_run_time > this->snopt_max_run_time_upperBound)
             {
                 throw std::out_of_range("Input option snopt_max_run_time is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->snopt_max_run_time) + ", bounds are [" + std::to_string(this->snopt_max_run_time_lowerBound) + ", " + std::to_string(this->snopt_max_run_time_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_max_iterations")
+        {
+            this->ipopt_max_iterations = std::stoi(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_max_iterations < this->ipopt_max_iterations_lowerBound || this->ipopt_max_iterations > this->ipopt_max_iterations_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_max_iterations is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_max_iterations) + ", bounds are [" + std::to_string(this->ipopt_max_iterations_lowerBound) + ", " + std::to_string(this->ipopt_max_iterations_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_convergence_tolerance")
+        {
+            this->ipopt_convergence_tolerance = std::stod(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_convergence_tolerance < this->ipopt_convergence_tolerance_lowerBound || this->ipopt_convergence_tolerance > this->ipopt_convergence_tolerance_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_convergence_tolerance is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_convergence_tolerance) + ", bounds are [" + std::to_string(this->ipopt_convergence_tolerance_lowerBound) + ", " + std::to_string(this->ipopt_convergence_tolerance_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_constraint_violation_tolerance")
+        {
+            this->ipopt_constraint_violation_tolerance = std::stod(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_constraint_violation_tolerance < this->ipopt_constraint_violation_tolerance_lowerBound || this->ipopt_constraint_violation_tolerance > this->ipopt_constraint_violation_tolerance_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_constraint_violation_tolerance is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_constraint_violation_tolerance) + ", bounds are [" + std::to_string(this->ipopt_constraint_violation_tolerance_lowerBound) + ", " + std::to_string(this->ipopt_constraint_violation_tolerance_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_max_run_time")
+        {
+            this->ipopt_max_run_time = std::stoi(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_max_run_time < this->ipopt_max_run_time_lowerBound || this->ipopt_max_run_time > this->ipopt_max_run_time_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_max_run_time is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_max_run_time) + ", bounds are [" + std::to_string(this->ipopt_max_run_time_lowerBound) + ", " + std::to_string(this->ipopt_max_run_time_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_mu_strategy")
+        {
+            this->ipopt_mu_strategy = std::stoi(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_mu_strategy < this->ipopt_mu_strategy_lowerBound || this->ipopt_mu_strategy > this->ipopt_mu_strategy_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_mu_strategy is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_mu_strategy) + ", bounds are [" + std::to_string(this->ipopt_mu_strategy_lowerBound) + ", " + std::to_string(this->ipopt_mu_strategy_upperBound) + "].");
+            }
+            return;
+        }
+        if (linecell[0] == "ipopt_print_level")
+        {
+            this->ipopt_print_level = std::stoi(linecell[1]);
+            
+            //bounds check
+            if (this->ipopt_print_level < this->ipopt_print_level_lowerBound || this->ipopt_print_level > this->ipopt_print_level_upperBound)
+            {
+                throw std::out_of_range("Input option ipopt_print_level is out of bounds on line " + std::to_string(lineNumber) + ". Value is " + std::to_string(this->ipopt_print_level) + ", bounds are [" + std::to_string(this->ipopt_print_level_lowerBound) + ", " + std::to_string(this->ipopt_print_level_upperBound) + "].");
             }
             return;
         }
@@ -2068,7 +2152,7 @@ namespace EMTG
     
         if (this->NLP_solver_type != 0 || writeAll)
         {
-            optionsFileStream << "#NLP solver type\n#0: SNOPT\n#1: WORHP" << std::endl;
+            optionsFileStream << "#NLP solver type\n#0: SNOPT\n#1: WORHP\n#2: IPOPT" << std::endl;
             optionsFileStream << "NLP_solver_type " << this->NLP_solver_type << std::endl;
         }
     
@@ -2184,6 +2268,42 @@ namespace EMTG
         {
             optionsFileStream << "#NLP max run time (seconds)" << std::endl;
             optionsFileStream << "snopt_max_run_time " << this->snopt_max_run_time << std::endl;
+        }
+    
+        if (this->ipopt_max_iterations != -1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT max iterations (-1 uses snopt_major_iterations)" << std::endl;
+            optionsFileStream << "ipopt_max_iterations " << this->ipopt_max_iterations << std::endl;
+        }
+    
+        if (this->ipopt_convergence_tolerance != -1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT convergence tolerance (-1 uses snopt_optimality_tolerance)" << std::endl;
+            optionsFileStream << "ipopt_convergence_tolerance " << this->ipopt_convergence_tolerance << std::endl;
+        }
+    
+        if (this->ipopt_constraint_violation_tolerance != -1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT constraint violation tolerance (-1 uses snopt_feasibility_tolerance)" << std::endl;
+            optionsFileStream << "ipopt_constraint_violation_tolerance " << this->ipopt_constraint_violation_tolerance << std::endl;
+        }
+    
+        if (this->ipopt_max_run_time != -1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT max CPU time in seconds (-1 uses snopt_max_run_time)" << std::endl;
+            optionsFileStream << "ipopt_max_run_time " << this->ipopt_max_run_time << std::endl;
+        }
+    
+        if (this->ipopt_mu_strategy != 1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT barrier parameter strategy\n#0: monotone\n#1: adaptive" << std::endl;
+            optionsFileStream << "ipopt_mu_strategy " << this->ipopt_mu_strategy << std::endl;
+        }
+    
+        if (this->ipopt_print_level != -1 || writeAll)
+        {
+            optionsFileStream << "#IPOPT print level 0-12 (-1 auto from quiet_NLP)" << std::endl;
+            optionsFileStream << "ipopt_print_level " << this->ipopt_print_level << std::endl;
         }
     
         if (this->enable_Scalatron != 1 || writeAll)
@@ -2786,10 +2906,12 @@ namespace EMTG
             optionsFileStream << "ParallelShootingConstraintStateRepresentation " << this->ParallelShootingConstraintStateRepresentation << std::endl;
         }
     
-        // Always output the non-default printing option
-        optionsFileStream << "#Write only options that are *not* default into the .emtgopt file?" << std::endl;
-        optionsFileStream << "print_only_non_default_options " << this->print_only_non_default_options << std::endl;
-
+        if (this->print_only_non_default_options != 0 || writeAll)
+        {
+            optionsFileStream << "#Write only options that are *not* default into the .emtgopt file?" << std::endl;
+            optionsFileStream << "print_only_non_default_options " << this->print_only_non_default_options << std::endl;
+        }
+    
         if (this->output_file_frame != 1 || writeAll)
         {
             optionsFileStream << "#reference frame for output file (0: J2000_ICRF, 1: J2000_BCI, 2: J2000_BCF, 3: TrueOfDate_BCI, 4: TrueOfDate_BCF, 5: Principle Axes, 6: Topocentric, 7: Polar)" << std::endl;
