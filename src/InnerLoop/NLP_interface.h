@@ -33,8 +33,11 @@ namespace EMTG
         public:
             //constructor
             NLP_interface();
-            NLP_interface(problem* myProblem, 
+            NLP_interface(problem* myProblem,
                 const NLPoptions& myOptions);
+
+            //destructor
+            virtual ~NLP_interface() {}
 
             //get/set
             inline void setX0_scaled(const std::vector<doubleType>& X0_scaled_in) {this->X0_scaled = X0_scaled_in; }
@@ -45,7 +48,7 @@ namespace EMTG
             inline std::vector<doubleType> getX_unscaled() const { return this->X_unscaled; }
             inline std::vector<doubleType> getF() const { return this->F; }
             inline std::vector<double> getFlowerbounds() const { return this->Flowerbounds; }
-            inline std::vector<double> getFupperbounds() const { return this->Flowerbounds; }
+            inline std::vector<double> getFupperbounds() const { return this->Fupperbounds; }
             inline std::vector<size_t> getiGfun() const { return this->iGfun; }
             inline std::vector<size_t> getjGvar() const { return this->jGvar; }
             inline std::vector<double> getG() const { return this->G; }
@@ -58,6 +61,10 @@ namespace EMTG
             inline std::vector<double> getG_NLP_incumbent() const { return this->G_NLP_incumbent; }
             inline doubleType getfeasibility_metric() const { return this->feasibility_metric; }
             inline doubleType getfeasibility_metric_NLP_incumbent() const { return this->feasibility_metric_NLP_incumbent; }
+
+            inline std::vector<double> getXlowerbounds() const { return this->Xlowerbounds; }
+            inline std::vector<double> getXupperbounds() const { return this->Xupperbounds; }
+            inline std::vector<doubleType> getX0_scaled() const { return this->X0_scaled; }
 
 			inline void setJGlobalIncumbent(const doubleType J) { this->JGlobalIncumbent = J; }
 			inline doubleType getJGlobalIncumbent() { return this->JGlobalIncumbent; }
