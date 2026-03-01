@@ -39,7 +39,13 @@ namespace EMTG
             feasibility_tolerance(1.0e-5),
             optimality_tolerance(1.0e-6),
             specs_file_path(""),
-            output_file_path("")
+            output_file_path(""),
+            ipopt_max_iterations(-1),
+            ipopt_convergence_tolerance(-1.0),
+            ipopt_constraint_violation_tolerance(-1.0),
+            ipopt_max_run_time(-1),
+            ipopt_mu_strategy(1),
+            ipopt_print_level(-1)
         {
         }
 
@@ -62,6 +68,12 @@ namespace EMTG
             this->feasibility_tolerance = options.snopt_feasibility_tolerance;
             this->optimality_tolerance = options.snopt_optimality_tolerance;
             this->objective_goal = options.NLP_objective_goal;
+            this->ipopt_max_iterations = options.ipopt_max_iterations;
+            this->ipopt_convergence_tolerance = options.ipopt_convergence_tolerance;
+            this->ipopt_constraint_violation_tolerance = options.ipopt_constraint_violation_tolerance;
+            this->ipopt_max_run_time = options.ipopt_max_run_time;
+            this->ipopt_mu_strategy = options.ipopt_mu_strategy;
+            this->ipopt_print_level = options.ipopt_print_level;
         }
 #endif
     }//end namespace Solvers

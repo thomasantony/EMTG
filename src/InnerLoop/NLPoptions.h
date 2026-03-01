@@ -79,6 +79,21 @@ namespace EMTG
             void set_specs_file_path(const std::string& specs_file_path) { this->specs_file_path = specs_file_path; }
             void set_output_file_path(const std::string& output_file_path) { this->output_file_path = output_file_path; }
 
+            // IPOPT-specific options
+            int get_ipopt_max_iterations() { return this->ipopt_max_iterations; }
+            double get_ipopt_convergence_tolerance() { return this->ipopt_convergence_tolerance; }
+            double get_ipopt_constraint_violation_tolerance() { return this->ipopt_constraint_violation_tolerance; }
+            int get_ipopt_max_run_time() { return this->ipopt_max_run_time; }
+            int get_ipopt_mu_strategy() { return this->ipopt_mu_strategy; }
+            int get_ipopt_print_level() { return this->ipopt_print_level; }
+
+            void set_ipopt_max_iterations(const int& v) { this->ipopt_max_iterations = v; }
+            void set_ipopt_convergence_tolerance(const double& v) { this->ipopt_convergence_tolerance = v; }
+            void set_ipopt_constraint_violation_tolerance(const double& v) { this->ipopt_constraint_violation_tolerance = v; }
+            void set_ipopt_max_run_time(const int& v) { this->ipopt_max_run_time = v; }
+            void set_ipopt_mu_strategy(const int& v) { this->ipopt_mu_strategy = v; }
+            void set_ipopt_print_level(const int& v) { this->ipopt_print_level = v; }
+
         protected:
             //fields
             NLPMode SolverMode;
@@ -98,7 +113,15 @@ namespace EMTG
             double optimality_tolerance;
             double objective_goal;
             std::string specs_file_path;
-            std::string output_file_path;            
+            std::string output_file_path;
+
+            // IPOPT-specific fields
+            int ipopt_max_iterations;
+            double ipopt_convergence_tolerance;
+            double ipopt_constraint_violation_tolerance;
+            int ipopt_max_run_time;
+            int ipopt_mu_strategy;
+            int ipopt_print_level;
         };//end class NLPOptions
     }//end namespace Solvers
 }//end namespace EMTG
