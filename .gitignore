@@ -133,3 +133,5 @@ PyEMTG/.spyproject/*.ini
 PyEMTG/.spyproject/*.bak
 PyEMTG/PEATSA/.idea/
 PyEMTG/OptionsOverhaul/.idea/
+
+.DS_Store
