@@ -1,0 +1,19 @@
+[project]
+name = "emtg"
+version = "0.1.0"
+description = "EMTG - Evolutionary Mission Trajectory Generator"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "scipy",
+    "astropy",
+    "autograd",
+    "matplotlib",
+    "spiceypy",
+    "psutil",
+]
+
+[project.optional-dependencies]
+gui = ["wxPython>=4.1.0"]
+dev = ["pytest>=7.0", "pytest-cov"]
