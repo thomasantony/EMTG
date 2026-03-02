@@ -1,0 +1,154 @@
+EMTG Regression Test System (Testatron)
+========================================
+
+This folder contains the EMTG regression test system, called "Testatron".
+Testatron runs EMTG on a set of test cases and compares the results against
+baseline (.emtg) truth files to detect regressions.
+
+=============
+PREREQUISITES
+=============
+
+Before running Testatron, you must obtain certain external data files that are
+not included in this repository. See the sections below for details.
+
+1. SPICE Ephemeris Files
+   Required files are listed in: universe/ephemeris_files/go_get_these_files.txt
+   These must be placed in: universe/ephemeris_files/
+
+2. Launch Vehicle Library Files
+   Required files are listed in: HardwareModels/go_get_these_files.txt
+   These must be placed in: HardwareModels/
+
+3. EMTG Executable
+   You must build EMTG from source. See /docs/build_system/ for build guides.
+
+4. PyEMTG
+   The PyEMTG Python package is required. It is located at /PyEMTG/.
+
+=====
+USAGE
+=====
+
+From the testatron directory, run:
+
+  python testatron.py [options]
+
+Key options:
+  -e <path>    Path to EMTG executable (default: c:/emtg/bin/EMTGv9.exe)
+  -p <path>    Path to PyEMTG (default: c:/emtg/PyEMTG/)
+  -a           Run all tests (default if no option specified)
+  -u           Run unit/feature tests only
+  -m           Run mission tests only
+  -c <cases>   Run specific test cases (space-separated, no extension)
+  -f <folders> Run all cases in specified test folder(s)
+  --failure <path>  Re-run previously failed tests from a failed_tests.csv
+  --update_truths   Re-run all tests and overwrite truth .emtg files
+
+For full help:
+  python testatron.py -h
+
+Example (Linux):
+  python testatron.py -e /path/to/EMTGv9 -p /path/to/PyEMTG/ -u
+
+================
+FOLDER STRUCTURE
+================
+
+testatron/
+|-- testatron.py              Main test driver script
+|-- README                    This file
+|
+|-- HardwareModels/           Hardware model configuration files
+|   |-- default.emtg_launchvehicleopt    Default launch vehicle library
+|   |-- default.emtg_spacecraftopt       Default spacecraft configuration
+|   |-- default.emtg_powersystemsopt     Default power system specifications
+|   |-- default.emtg_propulsionsystemopt Default propulsion system specs
+|   |-- default_2stage.emtg_spacecraftopt Two-stage spacecraft configuration
+|   |-- empty.ThrottleTable              Empty throttle table
+|   `-- go_get_these_files.txt           Instructions for obtaining external
+|                                        launch vehicle library files
+|
+|-- tests/                    Test cases organized by category
+|   |-- global_mission_options/   Tests for global mission configuration
+|   |-- journey_options/          Tests for journey-specific options
+|   |-- mission_tests/            Mission-level tests (place tests here)
+|   |-- output_options/           Tests for output configuration
+|   |-- physics_options/          Tests for physics model options
+|   |-- script_constraint_tests/  Tests for constraint scripting
+|   |-- solver_options/           Tests for solver configuration
+|   |-- spacecraft_options/       Tests for spacecraft hardware options
+|   |-- state_representation_tests/  Tests for state representation methods
+|   `-- transcription_tests/     Tests for transcription methods
+|
+|-- universe/                 Universe configuration and supporting data
+|   |-- *.emtg_universe           Celestial body definition files
+|   |-- atmosphere_files/         Atmospheric density model files
+|   |-- gravity_files/            Gravity field model files
+|   `-- ephemeris_files/          SPICE kernel files (must be obtained separately;
+|                                 see ephemeris_files/go_get_these_files.txt)
+|
+`-- peatsa_test/              Parametric study (PEATSA) test files
+    |-- PEATSATest.py             PEATSA test validation script
+    |-- peatsa_test.emtgopt        PEATSA configuration file
+    |-- peatsa_test_input.csv      Input parameter definitions
+    `-- peatsa_test_input.py       Input script
+
+==========
+TEST FILES
+==========
+
+Each test case consists of two files with the same base name:
+  <testname>.emtgopt   Mission options file (input to EMTG)
+  <testname>.emtg      Baseline truth file (expected output for comparison)
+
+Testatron automatically overrides the following paths in each .emtgopt file
+at runtime so that tests are portable across different installations:
+  - universe_folder  -> testatron/universe/
+  - HardwarePath     -> testatron/HardwareModels/
+  - gravity file paths -> testatron/universe/gravity_files/
+
+===================
+UNIVERSE DATA FILES
+===================
+
+The universe/ folder contains celestial body definitions for the following:
+  Earth, Moon, Mars, Venus, Jupiter, Saturn, Sun, SmallBody, and variants.
+
+Atmosphere files (universe/atmosphere_files/):
+  EarthExponentialSMEMean.emtg_densityopt and related files.
+
+Gravity files (universe/gravity_files/):
+  JGM3.grv (Earth), LP150Q.grv (Moon), and others.
+
+Ephemeris files (universe/ephemeris_files/):
+  SPICE kernels must be downloaded separately. See go_get_these_files.txt
+  in that folder for the list of required files and where to obtain them.
+
+======================
+HARDWARE MODEL FILES
+======================
+
+The HardwareModels/ folder contains hardware configuration files used by tests.
+Some tests reference launch vehicle library files that are not included in this
+repository because they contain data from the NASA Launch Services Program (NLSP)
+National Launch Schedule (NLS-II). See HardwareModels/go_get_these_files.txt
+for details on which files are needed and how to obtain them.
+
+The default.emtg_launchvehicleopt file included in this repository contains
+three placeholder entries:
+  Fixed_Initial_Mass               - Sets a fixed initial spacecraft mass
+  Depart_With_Spacecraft_Thrusters - Departs using onboard propulsion
+  ExampleRocket                    - Example polynomial launch vehicle model
+
+============================
+TEST RESULTS AND OUTPUT
+============================
+
+Test output is written to: testatron/output/<timestamp>/
+  test_results.csv    Summary of all tests run and their pass/fail status
+  failed_tests.csv    Details of any failures (can be used with --failure option)
+  <test>_comparison.csv  Per-test comparison details
+
+If a test fails, the failed_tests.csv records which parameters did not match
+the baseline truth file, along with the actual and expected values.

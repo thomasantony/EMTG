@@ -1,0 +1,48 @@
+Several of the Testatron regression tests require launch vehicle performance data
+from the NASA Launch Services Program (NLSP) National Launch Schedule II (NLS-II).
+These files are not included in the EMTG open source release.
+
+The following launch vehicle library files are referenced by tests in this
+repository and must be placed in this HardwareModels/ folder:
+
+  NLSII_April2017.emtg_launchvehicleopt
+    Used by tests in:
+      - tests/global_mission_options/
+      - tests/journey_options/
+      - tests/output_options/
+      - tests/physics_options/
+      - tests/script_constraint_tests/
+      - tests/solver_options/
+      - tests/spacecraft_options/
+      - tests/state_representation_tests/
+      - tests/transcription_tests/
+
+  NLSII_August2018.emtg_launchvehicleopt
+    Used by tests in:
+      - testatron/peatsa_test/
+
+These files contain polynomial launch vehicle performance models in the EMTG
+launch vehicle library format. The file format is space-delimited with the
+following columns:
+  name ModelType DLA_lower(deg) DLA_upper(deg) C3_lower C3_upper coefficient[0] coefficient[1] ...
+
+Where:
+  - ModelType 0 is the standard polynomial curve (coefficients correspond to
+    powers of C3 in km^2/s^2, performance in kg)
+  - DLA bounds are the declination of launch asymptote limits in degrees
+  - C3 bounds are the launch energy limits in km^2/s^2
+
+To obtain these files, contact the NASA Launch Services Program or refer to
+publicly available launch vehicle performance data to construct equivalent
+library files.
+
+Alternatively, if you do not have access to the NLS-II data, you can update
+the test .emtgopt files to use the included default.emtg_launchvehicleopt
+and the launch vehicle keys it defines:
+  - Fixed_Initial_Mass
+  - Depart_With_Spacecraft_Thrusters
+  - ExampleRocket
+
+Note: Tests that use Atlas V or Falcon Heavy launch vehicle keys
+(Atlas_V_401, Atlas_V_411, Atlas_V_551, Falcon_Heavy_(RecoveryAug2018))
+require an NLS-II compatible launch vehicle library file.
