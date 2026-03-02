@@ -1,13 +1,13 @@
 """
-Download external data files required for EMTG Testatron regression tests.
+Set up external data files required for EMTG Testatron regression tests.
 
-Files downloaded:
-    universe/ephemeris_files/  - SPICE kernels from NAIF/JPL
+Files downloaded from NAIF/JPL:
+    universe/ephemeris_files/  - SPICE kernels
 
-Files NOT downloaded (not publicly available):
+Files copied from within the repo:
     HardwareModels/NLSII_April2017.emtg_launchvehicleopt
     HardwareModels/NLSII_August2018.emtg_launchvehicleopt
-    See HardwareModels/go_get_these_files.txt for details.
+    (copied from docs/0_Users/tutorial/.../LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt)
 
 Usage:
     cd /path/to/testatron
@@ -15,11 +15,18 @@ Usage:
 """
 
 import os
+import shutil
 import sys
 import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHEMERIS_DIR = os.path.join(SCRIPT_DIR, 'universe', 'ephemeris_files')
+HARDWARE_DIR = os.path.join(SCRIPT_DIR, 'HardwareModels')
+PUBLSII = os.path.join(
+    SCRIPT_DIR, '..', 'docs', '0_Users', 'tutorial',
+    'Tutorial_EMTG_Files', 'Config_Files', 'hardware_models',
+    'LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt'
+)
 
 NAIF_BASE = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels'
 
@@ -115,25 +122,42 @@ def main():
 
     print('--- Launch Vehicle Library Files ---')
     print()
-    print('  [SKIP] NLSII_April2017.emtg_launchvehicleopt')
-    print('  [SKIP] NLSII_August2018.emtg_launchvehicleopt')
-    print()
-    print('  These files contain NASA Launch Services Program (NLS-II) data')
-    print('  and are not publicly available for automatic download.')
-    print('  See HardwareModels/go_get_these_files.txt for details.')
+
+    src = os.path.normpath(PUBLSII)
+    lv_names = [
+        'NLSII_April2017.emtg_launchvehicleopt',
+        'NLSII_August2018.emtg_launchvehicleopt',
+    ]
+    if not os.path.exists(src):
+        print(f'  [FAIL] Source file not found:')
+        print(f'         {src}')
+        failures.extend(lv_names)
+    else:
+        for name in lv_names:
+            dest = os.path.join(HARDWARE_DIR, name)
+            if os.path.exists(dest):
+                print(f'  [SKIP] {name} already exists')
+            else:
+                shutil.copy2(src, dest)
+                print(f'  [COPY] {name}')
+                print(f'         <- {os.path.basename(src)}')
+        print()
+        print(f'  Source: LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt')
+        print(f'  (publicly distributable NLS-II data included with the EMTG tutorial)')
+
     print()
     print('==============================================')
 
     if failures:
-        print(' WARNING: The following files failed to download:')
+        print(' WARNING: The following files could not be set up:')
         for f in failures:
             print(f'   - {f}')
         print()
         sys.exit(1)
     else:
-        print(' Download complete.')
-        print(f' SPICE kernels written to:')
-        print(f'   {EPHEMERIS_DIR}')
+        print(' Setup complete.')
+        print(f' SPICE kernels:   {EPHEMERIS_DIR}')
+        print(f' Launch vehicles: {HARDWARE_DIR}')
         print('==============================================')
 
 

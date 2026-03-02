@@ -4,10 +4,10 @@
 # Files downloaded:
 #   universe/ephemeris_files/  - SPICE kernels from NAIF/JPL
 #
-# Files NOT downloaded (not publicly available):
+# Files copied from within the repo:
 #   HardwareModels/NLSII_April2017.emtg_launchvehicleopt
 #   HardwareModels/NLSII_August2018.emtg_launchvehicleopt
-#   See HardwareModels/go_get_these_files.txt for details.
+#   (copied from docs/0_Users/tutorial/.../LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt)
 #
 # Usage:
 #   cd /path/to/testatron
@@ -17,14 +17,14 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EPHEMERIS_DIR="${SCRIPT_DIR}/universe/ephemeris_files"
+HARDWARE_DIR="${SCRIPT_DIR}/HardwareModels"
+PUBLSII="${SCRIPT_DIR}/../docs/0_Users/tutorial/Tutorial_EMTG_Files/Config_Files/hardware_models/LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt"
 
 NAIF_BASE="https://naif.jpl.nasa.gov/pub/naif/generic_kernels"
 
 echo "=============================================="
 echo " EMTG Testatron Data File Downloader"
 echo "=============================================="
-echo ""
-echo "Destination: ${EPHEMERIS_DIR}"
 echo ""
 
 mkdir -p "${EPHEMERIS_DIR}"
@@ -90,15 +90,32 @@ download_file \
 echo ""
 echo "--- Launch Vehicle Library Files ---"
 echo ""
-echo "  [SKIP] NLSII_April2017.emtg_launchvehicleopt"
-echo "  [SKIP] NLSII_August2018.emtg_launchvehicleopt"
+
+copy_lv_file() {
+    local dest="${HARDWARE_DIR}/$1"
+    if [ -f "${dest}" ]; then
+        echo "  [SKIP] $1 already exists"
+        return
+    fi
+    if [ ! -f "${PUBLSII}" ]; then
+        echo "  [FAIL] Source not found: ${PUBLSII}"
+        echo "         Cannot create $1"
+        return 1
+    fi
+    cp "${PUBLSII}" "${dest}"
+    echo "  [COPY] $1"
+    echo "         <- $(basename "${PUBLSII}")"
+}
+
+copy_lv_file "NLSII_April2017.emtg_launchvehicleopt"
+copy_lv_file "NLSII_August2018.emtg_launchvehicleopt"
+
 echo ""
-echo "  These files contain NASA Launch Services Program (NLS-II) data"
-echo "  and are not publicly available for automatic download."
-echo "  See HardwareModels/go_get_these_files.txt for details."
+echo "  Source: LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt"
+echo "  (publicly distributable NLS-II data included with the EMTG tutorial)"
 echo ""
 echo "=============================================="
-echo " Download complete."
-echo " SPICE kernels written to:"
-echo "   ${EPHEMERIS_DIR}"
+echo " Setup complete."
+echo " SPICE kernels:     ${EPHEMERIS_DIR}"
+echo " Launch vehicles:   ${HARDWARE_DIR}"
 echo "=============================================="

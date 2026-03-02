@@ -1,48 +1,41 @@
-Several of the Testatron regression tests require launch vehicle performance data
-from the NASA Launch Services Program (NLSP) National Launch Schedule II (NLS-II).
-These files are not included in the EMTG open source release.
-
-The following launch vehicle library files are referenced by tests in this
-repository and must be placed in this HardwareModels/ folder:
+The Testatron regression tests reference two launch vehicle library files that
+are not committed directly to this folder:
 
   NLSII_April2017.emtg_launchvehicleopt
-    Used by tests in:
-      - tests/global_mission_options/
-      - tests/journey_options/
-      - tests/output_options/
-      - tests/physics_options/
-      - tests/script_constraint_tests/
-      - tests/solver_options/
-      - tests/spacecraft_options/
-      - tests/state_representation_tests/
-      - tests/transcription_tests/
-
   NLSII_August2018.emtg_launchvehicleopt
-    Used by tests in:
-      - testatron/peatsa_test/
 
-These files contain polynomial launch vehicle performance models in the EMTG
-launch vehicle library format. The file format is space-delimited with the
-following columns:
-  name ModelType DLA_lower(deg) DLA_upper(deg) C3_lower C3_upper coefficient[0] coefficient[1] ...
+These can be obtained by running the setup script from the testatron directory:
 
-Where:
-  - ModelType 0 is the standard polynomial curve (coefficients correspond to
-    powers of C3 in km^2/s^2, performance in kg)
-  - DLA bounds are the declination of launch asymptote limits in degrees
-  - C3 bounds are the launch energy limits in km^2/s^2
+  python get_data_files.py    (cross-platform)
+  bash get_data_files.sh      (Linux / macOS)
 
-To obtain these files, contact the NASA Launch Services Program or refer to
-publicly available launch vehicle performance data to construct equivalent
-library files.
+The script copies the publicly distributable NLS-II launch vehicle data file
+that is included with the EMTG tutorial:
 
-Alternatively, if you do not have access to the NLS-II data, you can update
-the test .emtgopt files to use the included default.emtg_launchvehicleopt
-and the launch vehicle keys it defines:
-  - Fixed_Initial_Mass
-  - Depart_With_Spacecraft_Thrusters
-  - ExampleRocket
+  docs/0_Users/tutorial/Tutorial_EMTG_Files/Config_Files/hardware_models/
+      LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt
 
-Note: Tests that use Atlas V or Falcon Heavy launch vehicle keys
-(Atlas_V_401, Atlas_V_411, Atlas_V_551, Falcon_Heavy_(RecoveryAug2018))
-require an NLS-II compatible launch vehicle library file.
+That file contains polynomial performance models for:
+  Atlas_V_401, Atlas_V_411, Atlas_V_421, Atlas_V_431,
+  Atlas_V_501, Atlas_V_511, Atlas_V_521, Atlas_V_531,
+  Atlas_V_541, Atlas_V_551, Atlas_V_541_Star48BV, Atlas_V_551_Star48BV,
+  Delta_IV_Heavy,
+  Falcon_9_FT_(RTLS), Falcon_9_FT_(ASDS),
+  Falcon_Heavy_(RecoveryAug2018), Falcon_Heavy_(ExpendableAug2018),
+  Antares_232,
+  Fixed_Initial_Mass, Depart_With_Spacecraft_Thrusters
+
+This covers all launch vehicle keys used by the Testatron test suite.
+
+----
+
+Background: the original NLS-II files (from the NASA Launch Services Program
+contract) are not publicly releasable. The tutorial file above is a publicly
+distributable subset derived from the same data source and was released
+alongside the EMTG open-source distribution.
+
+File format reference (space-delimited):
+  name  ModelType  DLA_lower(deg)  DLA_upper(deg)  C3_lower  C3_upper  coeff[0]  coeff[1]  ...
+
+ModelType 0: standard polynomial, ith coefficient = ith power of C3 (km^2/s^2),
+             performance output in kg.
