@@ -1,17 +1,17 @@
-'''
+"""
 This program allows the user to run any or all of the 
 EMTG regression tests in the test suite. 
 
 --------------------------------------- USAGE -------------------------------------------
 1) Open anaconda prompt & change directory to the testatron folder 
-   e.g. > cd C:\emtg\testatron
+   e.g. > cd C:\\emtg\\testatron
    
 2) Use 'python testatron.py -h' to see help on command-line args
-'''
+"""
 
-'''
+"""
 Import utilities
-'''
+"""
 from os import makedirs, getcwd, listdir, system, walk, path
 from time import strftime
 import ast
@@ -23,9 +23,9 @@ import argparse
 test_directory = getcwd().replace('\\','/') + '/tests/' 
 
 
-'''
+"""
 PARSE USER INPUT ------------------------------------------------------------------------
-'''
+"""
 test_cases = [];
 
 # use argparse package
@@ -160,9 +160,9 @@ else: # Else run all b/c can't use 'cases' without actual cases
 
 
 
-'''
+"""
 METHOD: MAKE THE LIST OF TESTS ----------------------------------------------------------
-'''
+"""
 def MakeTestsList(test_cases):
     tests_list = [] # Initialize
     test_folders = []
@@ -210,9 +210,9 @@ def MakeTestsList(test_cases):
                 tests_list.append(test_directory+test+'/'+file.replace('.emtgopt','')) 
 
     return tests_list
-'''
+"""
 ------------------------------------------------------------------------------------------
-'''
+"""
 
 # Create tests list
 tests_to_run = MakeTestsList(test_cases)
@@ -239,10 +239,10 @@ if updateTruths == 0:
     failFile = open(outputdir + '/failed_tests.csv','w') 
     failFile.write('Beginning test run ' + now + '\n\n')
 
-'''
+"""
 Run the tests ---------------------------------------------------------------------------
 
-'''
+"""
 import os
 import sys
 sys.path.append(test_directory)
@@ -419,7 +419,3 @@ else:
 
     summaryFile.close()
     failFile.close()
-
-
-
-
