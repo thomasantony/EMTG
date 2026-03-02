@@ -180,18 +180,40 @@ namespace EMTG
                 Solvers::NLPoptions myNLPoptions(this->options);
 
                 std::unique_ptr<Solvers::NLP_interface> myNLP;
+// Example: 2 = IPOPT, 3 = SNOPT
+
 #ifdef USE_IPOPT
-                if (this->options.NLP_solver_type == 2)
-                    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-                else
+// If IPOPT is available and either explicitly requested or no solver is specified,
+// default to IPOPT.
+if (this->options.NLP_solver_type == 2
+    || this->options.NLP_solver_type <= 0) {
+    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
+} else
 #endif
-                {
+{
 #ifdef USE_SNOPT
-                    myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+    if (this->options.NLP_solver_type == 3) {
+        myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+    } else {
+#ifdef USE_IPOPT
+        // Fallback to IPOPT if SNOPT not requested.
+        myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
 #else
-                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
+        throw std::runtime_error(
+            "Unknown NLP solver type and IPOPT/SNOPT not available.");
 #endif
-                }
+    }
+#else
+#ifdef USE_IPOPT
+    // SNOPT not available, always fallback to IPOPT.
+    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
+#else
+    throw std::runtime_error(
+        "No NLP solver available. Rebuild with USE_IPOPT or USE_SNOPT.");
+#endif
+#endif
+}
+
                 EMTG::Solvers::MBH solver(this, myNLP.get());
 
                 if (options.seed_MBH)
@@ -878,4 +900,3 @@ namespace EMTG
         }
     }//end what_the_heck_am_I_called()
 } /* namespace EMTG */
-
