@@ -62,7 +62,7 @@ mission_type 6
 #NLP solver type
 #0: SNOPT
 #1: WORHP
-NLP_solver_type 0
+NLP_solver_type 2
 #NLP solver mode
 #0: find feasible point only
 #1: find optimal solution
@@ -787,4 +787,3 @@ p0MGAnDSMsBackwardSubPhase0: burn index ,0.54726944928313614458
 END_TRIALX
 
 END_JOURNEY
-

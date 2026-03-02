@@ -62,7 +62,7 @@ mission_type 2
 #NLP solver type
 #0: SNOPT
 #1: WORHP
-NLP_solver_type 0
+NLP_solver_type 2
 #NLP solver mode
 #0: find feasible point only
 #1: find optimal solution
@@ -842,4 +842,3 @@ p0MGALT: step 19 u_z ,-3.4156075760960469268e-05
 END_TRIALX
 
 END_JOURNEY
-
