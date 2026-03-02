@@ -50,6 +50,9 @@ PyEMTG/.idea/*
 Universe/ephemeris_files/*.bsp
 Universe/ephemeris_files/*.tls
 Universe/ephemeris_files/*.tpc
+testatron/universe/ephemeris_files/*.bsp
+testatron/universe/ephemeris_files/*.tls
+testatron/universe/ephemeris_files/*.tpc
 
 #######################
 # Latex build artifacts
