@@ -56,6 +56,11 @@ SPICE_FILES = [
         'filename': 'jup365.bsp',
         'description': 'Jupiter satellite kernel',
     },
+    {
+        'url': f'{NAIF_BASE}/spk/asteroids/codes_300ast_20100725.bsp',
+        'filename': 'codes_300ast_20100725.bsp',
+        'description': '300-asteroid SPK including body 2000336 (~59 MB)',
+    },
 ]
 
 

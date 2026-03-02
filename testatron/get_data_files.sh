@@ -87,6 +87,13 @@ download_file \
     "${EPHEMERIS_DIR}/jup365.bsp" \
     "Jupiter satellite kernel (jup365.bsp)"
 
+# 300-asteroid SPK — contains body 2000336 (asteroid 336 Lacadiera), required
+# by the Earth_to_SmallBody_SAM* regression tests (~59 MB)
+download_file \
+    "${NAIF_BASE}/spk/asteroids/codes_300ast_20100725.bsp" \
+    "${EPHEMERIS_DIR}/codes_300ast_20100725.bsp" \
+    "300-asteroid SPK including body 2000336 (codes_300ast_20100725.bsp, ~59 MB)"
+
 echo ""
 echo "--- Launch Vehicle Library Files ---"
 echo ""
