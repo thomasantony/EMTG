@@ -1,41 +1,82 @@
-The Testatron regression tests reference two launch vehicle library files that
-are not committed directly to this folder:
+The Testatron regression tests require several hardware model files that are
+not committed to this HardwareModels/ folder. They fall into two categories:
 
-  NLSII_April2017.emtg_launchvehicleopt
-  NLSII_August2018.emtg_launchvehicleopt
+================================================================================
+CATEGORY A: Files obtainable by running the setup script
+================================================================================
 
-These can be obtained by running the setup script from the testatron directory:
+Run either of the following from the testatron/ directory:
 
   python get_data_files.py    (cross-platform)
   bash get_data_files.sh      (Linux / macOS)
 
 The script copies the publicly distributable NLS-II launch vehicle data file
-that is included with the EMTG tutorial:
+that is already included with the EMTG tutorial:
 
+  NLSII_April2017.emtg_launchvehicleopt  (used by most test suites)
+  NLSII_August2018.emtg_launchvehicleopt  (used by peatsa_test)
+
+These are copied from:
   docs/0_Users/tutorial/Tutorial_EMTG_Files/Config_Files/hardware_models/
       LaunchVehicles_PubliclyDistributable_NLSII.emtg_launchvehicleopt
 
-That file contains polynomial performance models for:
-  Atlas_V_401, Atlas_V_411, Atlas_V_421, Atlas_V_431,
-  Atlas_V_501, Atlas_V_511, Atlas_V_521, Atlas_V_531,
-  Atlas_V_541, Atlas_V_551, Atlas_V_541_Star48BV, Atlas_V_551_Star48BV,
-  Delta_IV_Heavy,
-  Falcon_9_FT_(RTLS), Falcon_9_FT_(ASDS),
-  Falcon_Heavy_(RecoveryAug2018), Falcon_Heavy_(ExpendableAug2018),
-  Antares_232,
+Vehicle keys covered: Atlas_V_401, Atlas_V_411, Atlas_V_421, Atlas_V_431,
+  Atlas_V_501, Atlas_V_511, Atlas_V_521, Atlas_V_531, Atlas_V_541,
+  Atlas_V_551, Atlas_V_541_Star48BV, Atlas_V_551_Star48BV, Delta_IV_Heavy,
+  Falcon_9_FT_(RTLS), Falcon_9_FT_(ASDS), Falcon_Heavy_(RecoveryAug2018),
+  Falcon_Heavy_(ExpendableAug2018), Antares_232,
   Fixed_Initial_Mass, Depart_With_Spacecraft_Thrusters
 
-This covers all launch vehicle keys used by the Testatron test suite.
+================================================================================
+CATEGORY B: Files not publicly available — contact NASA for access
+================================================================================
 
-----
+The following files are not included in the EMTG open-source release because
+they contain proprietary or program-specific data. Tests that reference them
+will fail without them.
 
-Background: the original NLS-II files (from the NASA Launch Services Program
-contract) are not publicly releasable. The tutorial file above is a publicly
-distributable subset derived from the same data source and was released
-alongside the EMTG open-source distribution.
+--- NEXT Ion Thruster Throttle Table ---
 
-File format reference (space-delimited):
-  name  ModelType  DLA_lower(deg)  DLA_upper(deg)  C3_lower  C3_upper  coeff[0]  coeff[1]  ...
+  NEXT_TT11_NewFrontiers_EOL_1_3_2017.ThrottleTable
+    NEXT thruster throttle table (version 11, New Frontiers, End-of-Life).
+    Used by ~42 tests in:
+      - tests/journey_options/
+      - tests/output_options/
+      - tests/physics_options/
+      - tests/solver_options/
+      - tests/spacecraft_options/default_SCfile_PM
 
-ModelType 0: standard polynomial, ith coefficient = ith power of C3 (km^2/s^2),
-             performance output in kg.
+--- Multi-stage Spacecraft Options Files ---
+
+  snapier_multistage.emtg_spacecraftopt
+    Used by tests in:
+      - tests/journey_options/EME_stageAfterArrival
+      - tests/journey_options/EME_stageBeforeArrival
+
+  spacecraft_LT_spacecraftFile.emtg_spacecraftopt
+    Used by tests in:
+      - tests/spacecraft_options/spacecraft_LT_spacecraftFile
+
+  spacecraft_LT_multiStage_spacecraftFile.emtg_spacecraftopt
+    Used by tests in:
+      - tests/spacecraft_options/default_SCfile_PM
+      - tests/spacecraft_options/spacecraft_LT_multiStage_spacecraftFile
+
+To obtain these files, contact the EMTG development team or the NASA
+Jet Propulsion Laboratory / Goddard Space Flight Center.
+
+================================================================================
+File format references
+================================================================================
+
+ThrottleTable format (space-delimited rows):
+  Throttle_Level  Input_Power(kW)  Thrust(mN)  Isp(s)  Efficiency
+  (See empty.ThrottleTable in this directory for the header format.)
+
+emtg_spacecraftopt format:
+  EMTG spacecraft options XML-like format; see default.emtg_spacecraftopt
+  in this directory for an example.
+
+LaunchVehicle library format (space-delimited):
+  name  ModelType  DLA_lower(deg)  DLA_upper(deg)  C3_lower  C3_upper  coeff[0] ...
+  ModelType 0: polynomial, ith coefficient = ith power of C3 (km^2/s^2), output kg.
