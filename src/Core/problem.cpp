@@ -182,37 +182,22 @@ namespace EMTG
                 std::unique_ptr<Solvers::NLP_interface> myNLP;
 // Example: 2 = IPOPT, 3 = SNOPT
 
-#ifdef USE_IPOPT
-// If IPOPT is available and either explicitly requested or no solver is specified,
-// default to IPOPT.
-if (this->options.NLP_solver_type == 2
-    || this->options.NLP_solver_type <= 0) {
-    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-} else
-#endif
-{
-#ifdef USE_SNOPT
-    if (this->options.NLP_solver_type == 3) {
-        myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
-    } else {
-#ifdef USE_IPOPT
-        // Fallback to IPOPT if SNOPT not requested.
-        myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-#else
-        throw std::runtime_error(
-            "Unknown NLP solver type and IPOPT/SNOPT not available.");
-#endif
-    }
-#else
-#ifdef USE_IPOPT
-    // SNOPT not available, always fallback to IPOPT.
-    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-#else
-    throw std::runtime_error(
-        "No NLP solver available. Rebuild with USE_IPOPT or USE_SNOPT.");
-#endif
-#endif
-}
+                #ifdef USE_IPOPT
+                // IPOPT has priority and is also the default.
+                if (this->options.NLP_solver_type == 2   // IPOPT requested
+                    || this->options.NLP_solver_type <= 0) { // default / unspecified
+                    myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
+                } else
+                #endif
+                {
+                #ifdef USE_SNOPT
+                    myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
+                #else
+                    throw std::runtime_error(
+                        "No valid NLP solver. Enable USE_IPOPT or USE_SNOPT.");
+                #endif
+                }
+
 
                 EMTG::Solvers::MBH solver(this, myNLP.get());
 
@@ -309,17 +294,20 @@ if (this->options.NLP_solver_type == 2
                 Solvers::NLPoptions myNLPoptions(this->options);
 
                 std::unique_ptr<Solvers::NLP_interface> myNLP;
-#ifdef USE_IPOPT
-                if (this->options.NLP_solver_type == 2)
+                #ifdef USE_IPOPT
+                // IPOPT has priority and is also the default.
+                if (this->options.NLP_solver_type == 2   // IPOPT requested
+                    || this->options.NLP_solver_type <= 0) { // default / unspecified
                     myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-                else
-#endif
+                } else
+                #endif
                 {
-#ifdef USE_SNOPT
+                #ifdef USE_SNOPT
                     myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
-#else
-                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
-#endif
+                #else
+                    throw std::runtime_error(
+                        "No valid NLP solver. Enable USE_IPOPT or USE_SNOPT.");
+                #endif
                 }
 
                 myNLP->setX0_unscaled(this->options.current_trialX);
@@ -446,17 +434,20 @@ if (this->options.NLP_solver_type == 2
                 Solvers::NLPoptions myNLPoptions(this->options);
 
                 std::unique_ptr<Solvers::NLP_interface> myNLP;
-#ifdef USE_IPOPT
-                if (this->options.NLP_solver_type == 2)
+                #ifdef USE_IPOPT
+                // IPOPT has priority and is also the default.
+                if (this->options.NLP_solver_type == 2   // IPOPT requested
+                    || this->options.NLP_solver_type <= 0) { // default / unspecified
                     myNLP = std::make_unique<Solvers::IPOPT_interface>(this, myNLPoptions);
-                else
-#endif
+                } else
+                #endif
                 {
-#ifdef USE_SNOPT
+                #ifdef USE_SNOPT
                     myNLP = std::make_unique<Solvers::SNOPT_interface>(this, myNLPoptions);
-#else
-                    throw std::runtime_error("SNOPT not available. Rebuild with USE_SNOPT=ON or set NLP_solver_type to 2 (IPOPT).");
-#endif
+                #else
+                    throw std::runtime_error(
+                        "No valid NLP solver. Enable USE_IPOPT or USE_SNOPT.");
+                #endif
                 }
                 Solvers::FilamentWalker myFilamentWalker(this, myNLP.get());
                 myFilamentWalker.walk();
