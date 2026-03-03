@@ -127,7 +127,7 @@ if(SPLINE_EPHEM)
     add_definitions(-DSPLINE_EPHEM)
 	
 	# GNU Scientific Library
-    set(GSL_INCLUDE_DIRS ${GSL_PATH})    
+    set(GSL_INCLUDE_DIRS ${GSL_PATH}/include)
     include_directories(${GSL_INCLUDE_DIRS})
     
 	add_library(gsl STATIC IMPORTED)
@@ -136,8 +136,8 @@ if(SPLINE_EPHEM)
 		set_property(TARGET gsl PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/gsl.lib)
 		set_property(TARGET gslcblas PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/gslcblas.lib)        
     else()
-        set_property(TARGET gsl PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/libgsl.a)
-		set_property(TARGET gslcblas PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/libgslcblas.a)
+        set_property(TARGET gsl PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/lib/libgsl.a)
+		set_property(TARGET gslcblas PROPERTY IMPORTED_LOCATION ${GSL_PATH}/${CMAKE_CFG_INTDIR}/lib/libgslcblas.a)
     endif()
 
 	set(GSL_LIBRARIES gsl gslcblas)
@@ -146,6 +146,7 @@ endif(SPLINE_EPHEM)
 
 #----------------CSpice Items------------------------------------------------------
 message(STATUS \n "Now checking for CSpice...")
+message(STATUS ${CSPICE_DIR}/src/cspice)
 if (MSVC) # aka 'windows'
 	set(CSPICE_FILE_TO_BE_CORRECTED "${CSPICE_DIR}/src/cspice/mkprodct.bat")
 	set(CSPICE_MAKEFILE "makeall.bat")
@@ -230,6 +231,8 @@ if (IS_DIRECTORY ${SNOPTDIR_OVRD}/include OR IS_DIRECTORY ${SNOPTDIR_OVRD}/inter
 	
 		set(SNOPT_INTERFACE_HEADERS ${SNOPT_75_PLUS_DIR}/include/snoptProblem.hpp ${SNOPT_75_PLUS_DIR}/include/snopt.h)
 		set(SNOPT_INTERFACE_SOURCE ${SNOPT_75_PLUS_DIR}/src/snoptProblem.cpp)
+    else ()
+        message(STATUS "lol")
 	endif()
 
     
@@ -248,8 +251,8 @@ if (IS_DIRECTORY ${SNOPTDIR_OVRD}/include OR IS_DIRECTORY ${SNOPTDIR_OVRD}/inter
         if (NOT MSVC)
             add_library(snopt SHARED IMPORTED)
             add_library(snopt_cpp SHARED IMPORTED)
-            set_property(TARGET snopt PROPERTY IMPORTED_LOCATION "${SNOPTDIR_OVRD}/lib/.libs/libsnopt7.so")
-            set_property(TARGET snopt_cpp PROPERTY IMPORTED_LOCATION "${SNOPTDIR_OVRD}/lib/.libs/libsnopt7_cpp.so")
+            set_property(TARGET snopt PROPERTY IMPORTED_LOCATION "${SNOPTDIR_OVRD}/lib/.libs/libsnopt7.a")
+            set_property(TARGET snopt_cpp PROPERTY IMPORTED_LOCATION "${SNOPTDIR_OVRD}/lib/.libs/libsnopt7_cpp.a")
         else(NOT MSVC)
             add_library(snopt STATIC IMPORTED)
             set_property(TARGET snopt PROPERTY IMPORTED_LOCATION "${SNOPTDIR_OVRD}/lib/snopt.lib")
@@ -263,7 +266,9 @@ if (IS_DIRECTORY ${SNOPTDIR_OVRD}/include OR IS_DIRECTORY ${SNOPTDIR_OVRD}/inter
             link_directories(${SNOPTDIR_OVRD}/lib)
         else()
             link_directories("${PROJECT_SOURCE_DIR}/lib")
+            link_directories("/opt/homebrew/Cellar/gcc/15.2.0_1/lib/gcc/current")
             link_directories(${SNOPTDIR_OVRD}/lib/.libs)
+            link_directories("/opt/homebrew/opt/openblas/lib")
         endif()
         add_library(snopt_interface ${SNOPT_INTERFACE_HEADERS} ${SNOPT_INTERFACE_SOURCE})
         if (MSVC)
